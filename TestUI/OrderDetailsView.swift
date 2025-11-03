@@ -284,18 +284,3 @@ struct OrderDetailsView: View {
         String(format: "%.2f", price)
     }
 }
-
-// MARK: - Preview
-#Preview {
-    OrderDetailsView(
-        items: [
-            OrderItem(name: "قهوة تركية", price: 3.50, quantity: 2),
-            OrderItem(name: "إسبريسو", price: 4.00, quantity: 1),
-            OrderItem(name: "كابتشينو", price: 5.00, quantity: 1)
-        ],
-        total: 16.00,
-        orderId: "ORD-12345",
-        orderDate: Date()
-    )
-    .environmentObject(AppNavigationCoordinator())
-}

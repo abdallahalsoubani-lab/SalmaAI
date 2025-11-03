@@ -33,16 +33,39 @@ struct AICallLandingView: View {
             page = .cliqReview(params: CliQReviewParams(amount: amount, phoneNumber: phone, alias: alias))
             print("📊 CliQ params: amount=\(amount), phone=\(phone ?? "nil"), alias=\(alias ?? "nil")")
         case "order", "orderDetails", "cart", "order_batch":
-            // استخدم orderItems من vm، إذا كان فارغ استخدم بيانات تجريبية
+            // استخدم orderItems من vm فقط - لا تستخدم static data
             print("✅ Matched cart/order/order_batch case!")
             print("📊 Current vm.orderItems count: \(vm.orderItems.count)")
+            print("🛒 checkoutReady: \(vm.checkoutReady)")
             
-            // إذا كان order_batch، انتظر شوي عشان orderItems تتحمل من JSON
-            if cleanPageStr == "order_batch" && vm.orderItems.isEmpty {
-                print("⏳ order_batch detected but orderItems empty, waiting 500ms...")
+            // للـ order_batch: تحقق من checkout: true
+            if cleanPageStr == "order_batch" {
+                if !vm.checkoutReady {
+                    print("⚠️ order_batch بدون checkout: true - NOT opening cart!")
+                    print("⚠️ انتظر حتى يكون checkout: true في JSON")
+                    page = nil
+                    return
+                }
+                print("✅ checkoutReady = true - proceeding to open cart")
+            }
+            
+            // إذا كان orderItems فاضية، انتظر شوي عشان JSON يتحمل
+            if vm.orderItems.isEmpty {
+                print("⏳ orderItems empty, waiting 500ms for JSON to load...")
+                let pageName = cleanPageStr // capture for closure
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                     // تحقق مرة ثانية بعد delay
-                    let items = self.vm.orderItems.isEmpty ? self.getSampleOrderItems() : self.vm.orderItems
+                    let items = self.vm.orderItems
+                    if items.isEmpty && pageName == "order_batch" {
+                        print("⚠️ WARNING: orderItems still empty after delay! No items to show.")
+                        // لا تفتح الصفحة إذا ما في منتجات
+                        return
+                    }
+                    // للـ order_batch: تحقق من checkout: true
+                    if pageName == "order_batch" && !self.vm.checkoutReady {
+                        print("⚠️ order_batch بدون checkout: true - NOT opening cart!")
+                        return
+                    }
                     let total = items.reduce(0.0) { $0 + $1.total }
                     let orderPage = NavigationPage.orderDetails(params: OrderDetailsParams(
                         items: items,
@@ -53,12 +76,14 @@ struct AICallLandingView: View {
                     print("📦 Order/Cart/Batch details (after delay): \(items.count) items, total=\(total)")
                     
                     // استخدم coordinator مباشرة
-                    self.coordinator.navigateTo(orderPage)
+                    if !items.isEmpty {
+                        self.coordinator.navigateTo(orderPage)
+                    }
                 }
                 return
             }
             
-            let items = vm.orderItems.isEmpty ? getSampleOrderItems() : vm.orderItems
+            let items = vm.orderItems
             let total = items.reduce(0.0) { $0 + $1.total }
             page = .orderDetails(params: OrderDetailsParams(
                 items: items,
@@ -69,7 +94,28 @@ struct AICallLandingView: View {
             print("📦 Order/Cart/Batch details: \(items.count) items, total=\(total)")
         case "add_product":
             // فتح صفحة إضافة منتج - حالياً نفتح صفحة السلة (cart) لأن ما عندنا صفحة add_product بعد
-            let items = vm.orderItems.isEmpty ? getSampleOrderItems() : vm.orderItems
+            // انتظر شوي عشان add_product JSON يتحمل في orderItems
+            if vm.orderItems.isEmpty {
+                print("⏳ add_product: orderItems empty, waiting 500ms for JSON to load...")
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+                    let items = self.vm.orderItems
+                    let total = items.reduce(0.0) { $0 + $1.total }
+                    let orderPage = NavigationPage.orderDetails(params: OrderDetailsParams(
+                        items: items,
+                        total: total,
+                        orderId: self.vm.orderId,
+                        orderDate: Date()
+                    ))
+                    print("🛒 Opening cart (add_product, after delay): \(items.count) items, total=\(total)")
+                    
+                    if !items.isEmpty {
+                        self.coordinator.navigateTo(orderPage)
+                    }
+                }
+                return
+            }
+            
+            let items = vm.orderItems
             let total = items.reduce(0.0) { $0 + $1.total }
             page = .orderDetails(params: OrderDetailsParams(
                 items: items,
@@ -77,7 +123,7 @@ struct AICallLandingView: View {
                 orderId: vm.orderId,
                 orderDate: Date()
             ))
-            print("🛒 Opening cart (add_product requested): \(items.count) items, total=\(total)")
+            print("🛒 Opening cart (add_product): \(items.count) items, total=\(total)")
         case "language":
             page = .language
         default:
@@ -198,7 +244,7 @@ struct AICallLandingView: View {
                 vm.disconnect()
             }
         }
-        .onDisappear { 
+        .onDisappear {
             // افحص إذا كانت الصفحة راحت لصفحة ثانية (طول navigation path > 1)
             if coordinator.path.count > 1 {
                 print("👋 View disappeared - navigating to another page")
@@ -231,6 +277,7 @@ struct AICallLandingView: View {
         .onChange(of: vm.navigationTarget) { target in
             print("🔄 onChange triggered - navigationTarget: \(target ?? "nil")")
             print("🔄 isNavigating: \(isNavigating), lastNavigationTarget: \(lastNavigationTarget ?? "nil")")
+            print("📊 Current orderItems count: \(vm.orderItems.count)")
             
             // تجنب التنقل المكرر
             if isNavigating {
@@ -250,16 +297,23 @@ struct AICallLandingView: View {
                 print("ℹ️ Target is nil")
             }
         }
+        .onChange(of: vm.orderItems) { items in
+            print("🛒 orderItems changed in view! Count: \(items.count)")
+            if !items.isEmpty {
+                print("📦 Current cart contents:")
+                for (index, item) in items.enumerated() {
+                    print("   [\(index + 1)] \(item.name) - \(item.price) × \(item.quantity) = \(item.total)")
+                }
+            }
+        }
     }
     
-    // MARK: - Sample Order Items (fallback)
+    // MARK: - Sample Order Items (fallback) - DEPRECATED
+    // لا نستخدم static data - نستخدم orderItems من vm فقط
     private func getSampleOrderItems() -> [OrderItem] {
-        // بيانات تجريبية للطلب - يمكن استبدالها ببيانات حقيقية من السيرفر
-        return [
-            OrderItem(name: "قهوة تركية", price: 3.50, quantity: 2),
-            OrderItem(name: "إسبريسو", price: 4.00, quantity: 1),
-            OrderItem(name: "كابتشينو", price: 5.00, quantity: 1)
-        ]
+        print("⚠️ WARNING: getSampleOrderItems called - this should not happen!")
+        print("⚠️ Returning empty array - use vm.orderItems instead")
+        return []
     }
 }
 
