@@ -1,0 +1,24 @@
+{
+  "originHash" : "2643bdf4c8c4f02237eeb04a449ec34750c7131c04bd7db33f620f05beb27faf",
+  "pins" : [
+    {
+      "identity" : "swiftuipager",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/fermoya/SwiftUIPager",
+      "state" : {
+        "revision" : "4ddc04c801aac143090bb14cf26603a3bf9c74cb",
+        "version" : "2.5.0"
+      }
+    },
+    {
+      "identity" : "webrtc",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/stasel/WebRTC",
+      "state" : {
+        "revision" : "86dbb5cb57e4da009b859a6245b1c10d610f215a",
+        "version" : "140.0.0"
+      }
+    }
+  ],
+  "version" : 3
+}
