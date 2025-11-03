@@ -26,16 +26,18 @@ struct OrderItem: Identifiable, Hashable {
     let name: String
     let price: Double
     let quantity: Int
+    let imageName: String? // اسم الصورة في Assets
     
     var total: Double {
         price * Double(quantity)
     }
     
-    init(id: String = UUID().uuidString, name: String, price: Double, quantity: Int = 1) {
+    init(id: String = UUID().uuidString, name: String, price: Double, quantity: Int = 1, imageName: String? = nil) {
         self.id = id
         self.name = name
         self.price = price
         self.quantity = quantity
+        self.imageName = imageName
     }
 }
 

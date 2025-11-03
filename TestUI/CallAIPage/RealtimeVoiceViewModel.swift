@@ -1276,11 +1276,31 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
             print("⚠️ Using fallback price: \(price)")
         }
         
+        // تحديد اسم الصورة بناءً على نوع المنتج
+        let imageName: String?
+        if category.contains("Turkish Coffee") && !weight.isEmpty {
+            // قهوة تركية بالوزن (كيلو/جرام) → صورة الباكيت
+            imageName = "turkish_coffee_packet"
+        } else if category.contains("Brewed") || (category.contains("Cups") && (productName.contains("Turkish") || productName.contains("تركية"))) {
+            // كاسة قهوة تركية → صورة الكاسة التركية
+            imageName = "turkish_coffee_cup"
+        } else if category.contains("Cups") && (cupType?.contains("Espresso") == true || productName.contains("Espresso") || productName.contains("إسبريسو")) {
+            // كاسة إسبريسو → صورة كاسة الإسبريسو
+            imageName = "espresso_cup"
+        } else if category.contains("Cups") {
+            // كاسات أخرى (Latte, Cappuccino, etc.)
+            imageName = "coffee_cup"
+        } else {
+            // منتجات أخرى (إسبريسو بالوزن، أمريكان، etc.)
+            imageName = "coffee_packet"
+        }
+        
         // إنشاء OrderItem
         return OrderItem(
             name: fullProductName,
             price: price,
-            quantity: quantity
+            quantity: quantity,
+            imageName: imageName
         )
     }
     

@@ -210,6 +210,28 @@ struct OrderDetailsView: View {
     @ViewBuilder
     private func orderItemRow(item: OrderItem) -> some View {
         HStack(alignment: .top, spacing: 12) {
+            // صورة المنتج
+            if let imageName = item.imageName {
+                Image(imageName)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(width: 60, height: 60)
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .background(
+                        RoundedRectangle(cornerRadius: 8)
+                            .fill(Color.gray.opacity(0.1))
+                    )
+            } else {
+                // Placeholder إذا ما في صورة
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.gray.opacity(0.2))
+                    .frame(width: 60, height: 60)
+                    .overlay(
+                        Image(systemName: "photo")
+                            .foregroundStyle(.gray.opacity(0.5))
+                    )
+            }
+            
             // Item info
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.name)
@@ -283,4 +305,19 @@ struct OrderDetailsView: View {
     private func formatPrice(_ price: Double) -> String {
         String(format: "%.2f", price)
     }
+}
+
+// MARK: - Preview
+#Preview {
+    OrderDetailsView(
+        items: [
+            OrderItem(name: "قهوة تركية", price: 3.50, quantity: 2, imageName: "turkish_coffee_packet"),
+            OrderItem(name: "إسبريسو", price: 4.00, quantity: 1, imageName: "espresso_cup"),
+            OrderItem(name: "كابتشينو", price: 5.00, quantity: 1, imageName: "coffee_cup")
+        ],
+        total: 16.00,
+        orderId: "ORD-12345",
+        orderDate: Date()
+    )
+    .environmentObject(AppNavigationCoordinator())
 }
