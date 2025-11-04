@@ -62,6 +62,20 @@ struct OrderDetailsView: View {
                     .padding(.vertical, 20)
                 }
             }
+            
+            // Floating buttons (Location + Confirm)
+            VStack {
+                Spacer()
+                VStack(spacing: 12) {
+                    // زر تحديد الموقع
+                    locationButton()
+                    
+                    // زر تأكيد الطلب
+                    confirmOrderButton()
+                }
+                .padding(.horizontal, 20)
+                .padding(.bottom, 30)
+            }
         }
         .background(Color(UIColor.systemGroupedBackground))
         .navigationBarBackButtonHidden(true)
@@ -284,6 +298,7 @@ struct OrderDetailsView: View {
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill")
                         .foregroundStyle(.green)
+                        .symbolEffect(.bounce, value: showSuccessAnimation)
                     Text("تم تأكيد الطلب بنجاح")
                         .font(.subheadline.weight(.medium))
                         .foregroundStyle(.green)
@@ -299,6 +314,71 @@ struct OrderDetailsView: View {
                 .fill(Color.white)
                 .shadow(color: Color.black.opacity(0.08), radius: 12, x: 0, y: 4)
         )
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showSuccessAnimation)
+    }
+    
+    // MARK: - Location Button
+    @ViewBuilder
+    private func locationButton() -> some View {
+        Button(action: {
+            // تحديد الموقع action
+            print("📍 Location button pressed")
+            // TODO: فتح صفحة تحديد الموقع
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: "location.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                
+                Text("تحديد الموقع")
+                    .font(.system(size: 18, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.blue)
+                    .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+            )
+        }
+        .disabled(showSuccessAnimation)
+        .opacity(showSuccessAnimation ? 0.6 : 1.0)
+    }
+    
+    // MARK: - Confirm Order Button
+    @ViewBuilder
+    private func confirmOrderButton() -> some View {
+        Button(action: {
+            // Confirm order action
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                showSuccessAnimation = true
+            }
+            
+            // Hide button after showing success
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                // Optional: Navigate back or perform other actions
+            }
+        }) {
+            HStack(spacing: 12) {
+                Image(systemName: "checkmark.circle.fill")
+                    .font(.system(size: 20, weight: .semibold))
+                
+                Text("تأكيد الطلب")
+                    .font(.system(size: 18, weight: .bold))
+            }
+            .foregroundStyle(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Brand.bgTop)
+                    .shadow(color: Brand.bgTop.opacity(0.3), radius: 8, x: 0, y: 4)
+            )
+        }
+        .disabled(showSuccessAnimation || items.isEmpty)
+        .opacity(showSuccessAnimation || items.isEmpty ? 0.6 : 1.0)
+        .scaleEffect(showSuccessAnimation ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: showSuccessAnimation)
     }
     
     // MARK: - Helper Functions

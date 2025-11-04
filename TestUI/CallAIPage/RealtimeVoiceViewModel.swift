@@ -181,11 +181,9 @@ struct ProductPriceCatalog {
         
         // البحث في القائمة
         if let price = prices[key] {
-            print("💰 Found price for key '\(key)': \(price)")
             return price
         }
         
-        print("⚠️ No price found for key: '\(key)'")
         return nil
     }
 }
@@ -209,10 +207,12 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
     // MARK: - Order Parameters
     @Published var orderItems: [OrderItem] = [] {
         didSet {
-            print("🛒 orderItems changed! New count: \(orderItems.count)")
+            print("\n🛒 ========== CART UPDATED ==========")
+            print("📊 Total items: \(orderItems.count)")
             for (index, item) in orderItems.enumerated() {
                 print("   [\(index + 1)] \(item.name) - \(item.price) × \(item.quantity) = \(item.total)")
             }
+            print("=====================================\n")
         }
     }
     @Published var orderId: String? = nil
@@ -228,6 +228,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
     private let backendURL = "http://35.202.32.216:8000"
     private var pendingFunctionCallArgs: [String: String] = [:] // لتجميع function arguments
     private var pendingTranscript: String = "" // لتجميع transcript deltas قبل استخراج JSON
+    private var pendingContentPart: String = "" // لتجميع content_part deltas قبل استخراج JSON
 
     // MARK: - WebRTC
     private var pcStored: RTCPeerConnection?
@@ -289,16 +290,12 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
 
             // 1) احصل على client_secret من السيرفر (الصوت مقفول cedar بالسيرفر)
             let tokenURL = URL(string: "\(backendURL)/v1/realtime/token")!
-            print("🔗 Attempting to connect to: \(tokenURL.absoluteString)")
-            print("🔗 Backend URL: \(backendURL)")
             
             var tokenReq = URLRequest(url: tokenURL)
             tokenReq.httpMethod = "POST"
             tokenReq.timeoutInterval = 30.0
             
-            print("📤 Sending token request...")
             let (tokData, tokResp) = try await URLSession.shared.data(for: tokenReq)
-            print("📥 Received response: status = \((tokResp as? HTTPURLResponse)?.statusCode ?? -1)")
             guard let http = tokResp as? HTTPURLResponse, http.statusCode < 300 else {
                 let body = String(data: tokData, encoding: .utf8) ?? ""
                 throw NSError(domain: "RealtimeVoice", code: -10,
@@ -312,7 +309,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 throw NSError(domain: "RealtimeVoice", code: -11,
                               userInfo: [NSLocalizedDescriptionKey: "client_secret missing/empty"])
             }
-            print("🟢 clientSecret length:", clientSecret.count)
 
             // 2) PeerConnection
             let config = RTCConfiguration()
@@ -352,7 +348,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             }
             var txErr: NSError?
             _ = tx.setDirection(.sendRecv, error: &txErr)
-            if let e = txErr { print("⚠️ setDirection error:", e.localizedDescription) }
 
             // 4) Offer + Local SDP
             let offerConstraints = RTCMediaConstraints(
@@ -401,7 +396,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             // ✅ Set session ID
             let newSessionID = UUID().uuidString
             self.sessionID = newSessionID
-            print("📱 Session ID: \(newSessionID)")
 
             DispatchQueue.main.async {
                 self.isConnected = true
@@ -410,12 +404,10 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 
                 // استعادة أي pending navigation
                 if let pendingNav = self.pendingNavigation {
-                    print("🔔 Restoring pending navigation: \(pendingNav)")
                     self.navigationTarget = pendingNav
                     self.pendingNavigation = nil
                 }
             }
-            print("✅ Connected to Realtime Voice")
 
         } catch {
             let errorDescription = error.localizedDescription
@@ -444,7 +436,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         // حفظ أي pending navigation قبل الانفصال
         if let navTarget = navigationTarget {
             pendingNavigation = navTarget
-            print("📦 Saved pending navigation: \(navTarget)")
         }
         
         pcStored?.close()
@@ -455,7 +446,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         navigationTarget = nil // ✅ امسح navigationTarget عند الانفصال
         // لا تمسح orderItems - احتفظ بالمنتجات حتى بعد disconnect (لحفظ السلة)
         checkoutReady = false // امسح checkoutReady عند disconnect
-        print("🛑 Disconnected from Realtime - orderItems preserved: \(orderItems.count) items")
     }
     
     // MARK: - Navigation Polling
@@ -468,13 +458,11 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 await self?.checkForNavigationCommand()
             }
         }
-        print("✅ Started navigation polling")
     }
     
     func stopNavigationPolling() {
         navigationTimer?.invalidate()
         navigationTimer = nil
-        print("🛑 Stopped navigation polling")
     }
     
     private func checkForNavigationCommand() async {
@@ -490,7 +478,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                hasNav == true,
                let page = json["page"] as? String {
                 
-                print("🎯 Navigation command received: \(page)")
                 DispatchQueue.main.async {
                     self.navigationTarget = page
                 }
@@ -561,7 +548,6 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         cfg.categoryOptions = [.mixWithOthers, .defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP]
         try? rtc.setConfiguration(cfg)
         try? rtc.setActive(true)
-        print("🔁 AudioSession reconfigured (isCaptured=\(isScreenCaptured))")
     }
 
     private func waitForIceGatheringComplete(using pc: RTCPeerConnection, timeout: TimeInterval) async throws {
@@ -657,16 +643,13 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
 extension RealtimeVoiceViewModel: RTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange stateChanged: RTCSignalingState) {
-        print("📡 Signaling:", stateChanged.rawValue)
     }
 
     func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
-        print("🤝 Should negotiate")
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCIceConnectionState) {
-        print("🔗 ICE Conn State:", newState.rawValue)
         if newState == .disconnected || newState == .failed || newState == .closed {
             DispatchQueue.main.async { self.isConnected = false }
         }
@@ -674,55 +657,38 @@ extension RealtimeVoiceViewModel: RTCPeerConnectionDelegate {
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCIceGatheringState) {
-        print("🧊 ICE Gathering:", newState.rawValue)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didGenerate candidate: RTCIceCandidate) {
-        print("➕ ICE candidate generated")
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didRemove candidates: [RTCIceCandidate]) {
-        print("➖ ICE candidates removed:", candidates.count)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
-        print("📨 DataChannel opened:", dataChannel.label)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didAdd stream: RTCMediaStream) {
-        print("📥 Legacy: didAdd stream:", stream.streamId)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didRemove stream: RTCMediaStream) {
-        print("🧹 Legacy: didRemove stream:", stream.streamId)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didAdd rtpReceiver: RTCRtpReceiver,
                         streams: [RTCMediaStream]) {
-        if rtpReceiver.track is RTCAudioTrack {
-            print("🔊 Remote audio track (Unified Plan):", rtpReceiver.track?.trackId ?? "-")
-        }
     }
 }
 
 // MARK: - RTCDataChannelDelegate
 extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
-        print("🧵 DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
-        
         guard dataChannel.readyState == .open, dataChannel.label == "oai-events" else { return }
-        
-        // ✅ FIXED: إلغاء الـ greeting التلقائي - الآن الـ AI رح يرد طبيعي أول ما المستخدم يحكي
-        // الـ greeting محدد في السيناريو على السيرفر وبيشتغل تلقائياً
-        // هذا يحسّن الثبات لأنه ما فيش conflict بين تعليمات التطبيق والسيرفر
-        
-        print("✅ DataChannel ready - waiting for user to speak")
         
         // ===========================================
         // OPTIONAL: لو بدك auto-greeting (بدون conflict)
@@ -750,195 +716,181 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
 
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         if !buffer.isBinary, let txt = String(data: buffer.data, encoding: .utf8) {
-            // Print response in requested format
-            print("\n===========> RESPONSE")
-            print(txt)
-            print("===========> END RESPONSE\n")
-            
-            // Log only if contains interesting data
-            if txt.contains("function") || txt.contains("page") || txt.contains("navigation") {
-                print("🔍 FOUND FUNCTION/PAGE/Navigation in message!")
-            }
-            
-            // ✅ تحقق إذا كان navigation event مباشر
+            // ✅ طباعة جميع الرسائل الواردة للتحقق
             if let data = txt.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let type = json["type"] as? String {
+                print("\n📨 ========== MESSAGE RECEIVED ==========")
+                print("📋 Type: \(type)")
                 
-                // استخرج text من response.text.done
-                if let responseText = json["text"] as? String {
-                    print("📝 AI text response: \(responseText)")
-                    print("🔍 Calling extractNavigationFromText...")
-                    // ابحث عن navigation command في النص
-                    if let result = extractNavigationFromText(responseText) {
-                        print("✅ Found navigation in text: \(result)")
-                        print("🎯 Setting navigationTarget to: \(result.page)")
+                // ✅ Handle audio transcript done - extract JSON from transcript
+                if type == "response.audio_transcript.done",
+                   let transcript = json["transcript"] as? String {
+                    
+                    print("📝 AUDIO TRANSCRIPT:")
+                    print("📏 Length: \(transcript.count) characters")
+                    print("📄 Content: \(transcript)")
+                    print("🔍 Contains 'page': \(transcript.contains("\"page\""))")
+                    print("🔍 Contains 'add_product': \(transcript.contains("add_product"))")
+                    print("🔍 Contains 'order_batch': \(transcript.contains("order_batch"))")
+                    
+                    // ✅ طباعة رد أمجد في console التطبيق (نفس شكل السيرفر)
+                    print("")
+                    print("🤖 Reply: \(transcript)")
+                    print("")
+                    
+                    // ✅ إرسال رد أمجد للسيرفر للتسجيل
+                    self.logMessageToServer(message: transcript, role: "assistant")
+                    
+                    // ابحث عن JSON في الـ transcript
+                    if transcript.contains("\"page\"") {
+                        print("✅ Found 'page' in transcript - extracting JSON...")
                         DispatchQueue.main.async {
-                            print("📱 INSIDE MAIN THREAD - Setting navigationTarget")
-                            self.navigationTarget = result.page
-                            self.cliqAmount = result.amount
-                            self.cliqPhoneNumber = result.phone
-                            print("📱 navigationTarget value after set: \(self.navigationTarget ?? "nil")")
+                            self.extractAndStoreProductFromJSON(transcript)
                         }
-                        return
                     } else {
-                        print("❌ extractNavigationFromText returned nil")
+                        print("⚠️ Transcript does not contain 'page' - skipping JSON extraction")
                     }
+                    print("==========================================\n")
+                    return
+                }
+                
+                // ✅ Handle content_part added - جمع deltas للـ JSON
+                if type == "response.content_part.added",
+                   let delta = json["delta"] as? String {
+                    print("📝 CONTENT PART DELTA:")
+                    print("📄 Delta: \(delta)")
+                    pendingContentPart += delta
+                    print("📦 Total content so far: \(String(pendingContentPart.prefix(200)))")
+                    print("==========================================\n")
+                    return
+                }
+                
+                // ✅ Handle content_part done - استخراج JSON من content الكامل
+                if type == "response.content_part.done",
+                   let content = json["content"] as? String {
+                    print("📝 CONTENT PART DONE:")
+                    print("📏 Length: \(content.count) characters")
+                    print("📄 Content: \(content)")
+                    print("🔍 Contains 'page': \(content.contains("\"page\""))")
+                    
+                    // استخدم content الكامل (أو pendingContentPart إذا كان content فارغ)
+                    let fullContent = content.isEmpty ? pendingContentPart : content
+                    
+                    // ابحث عن JSON في الـ content
+                    if fullContent.contains("\"page\"") {
+                        print("✅ Found 'page' in content_part - extracting JSON...")
+                        DispatchQueue.main.async {
+                            self.extractAndStoreProductFromJSON(fullContent)
+                        }
+                    } else {
+                        print("⚠️ Content part does not contain 'page' - skipping JSON extraction")
+                    }
+                    
+                    // امسح pendingContentPart بعد الاستخدام
+                    pendingContentPart = ""
+                    print("==========================================\n")
+                    return
                 }
                 
                 // ✅ Handle function call arguments (delta - جمع القطع)
-                if let type = json["type"] as? String,
-                   type == "response.function_call_arguments.delta",
+                if type == "response.function_call_arguments.delta",
                    let callId = json["call_id"] as? String,
                    let delta = json["delta"] as? String {
-                    print("📝 Collecting function call args for \(callId): \(delta)")
+                    print("📦 FUNCTION CALL ARGUMENTS DELTA:")
+                    print("🔑 Call ID: \(callId)")
+                    print("📄 Delta: \(delta)")
                     if pendingFunctionCallArgs[callId] == nil {
                         pendingFunctionCallArgs[callId] = ""
                     }
                     pendingFunctionCallArgs[callId] = (pendingFunctionCallArgs[callId] ?? "") + delta
-                    print("📦 Total args for \(callId): \(pendingFunctionCallArgs[callId] ?? "")")
-                    return
-                }
-                
-                // ✅ Handle audio transcript done - extract JSON from transcript
-                if let type = json["type"] as? String,
-                   type == "response.audio_transcript.done",
-                   let transcript = json["transcript"] as? String {
-                    print("📝 Audio transcript done (length: \(transcript.count)): \(String(transcript.prefix(200)))...")
-                    print("📝 Full transcript: \(transcript)")
-                    
-                    // ابحث عن JSON navigation command في الـ transcript
-                    if let result = extractNavigationFromText(transcript) {
-                        print("✅ Found navigation in transcript: page=\(result.page), amount=\(result.amount ?? "nil"), phone=\(result.phone ?? "nil"), alias=\(result.alias ?? "nil"), checkout=\(result.checkout?.description ?? "nil")")
-                        DispatchQueue.main.async {
-                            self.navigationTarget = result.page
-                            self.pendingNavigation = result.page
-                            self.cliqAmount = result.amount
-                            self.cliqPhoneNumber = result.phone
-                            self.cliqAlias = result.alias
-                            
-                            // ✅ للـ order_batch: تحقق من checkout: true
-                            if result.page == "order_batch" {
-                                if result.checkout == true {
-                                    print("✅ checkout: true detected - ready to open cart!")
-                                    self.checkoutReady = true
-                                    // استخرج بيانات المنتج من JSON
-                                    self.extractAndStoreProductFromJSON(transcript)
-                                    print("📊 After extraction, orderItems count: \(self.orderItems.count)")
-                                } else {
-                                    print("⚠️ order_batch without checkout: true - NOT opening cart")
-                                    self.checkoutReady = false
-                                    // لا تفتح الصفحة إذا checkout مش true
-                                    self.navigationTarget = nil
-                                    self.pendingNavigation = nil
-                                    return
-                                }
-                            } else if result.page == "add_product" {
-                                // add_product لا يحتاج checkout
-                                self.checkoutReady = false
-                                print("🛒 Extracting product data from JSON (add_product)...")
-                                self.extractAndStoreProductFromJSON(transcript)
-                                print("📊 After extraction, orderItems count: \(self.orderItems.count)")
-                            }
-                            print("✅ Set navigation data")
-                        }
-                    } else {
-                        print("⚠️ No navigation JSON found in transcript, but checking for order_batch anyway...")
-                        // حتى لو ما لقينا navigation، جرب استخرج JSON إذا كان فيه order_batch
-                        if transcript.contains("order_batch") || transcript.contains("\"page\":\"order_batch\"") {
-                            print("🛒 Found order_batch in transcript, extracting...")
-                            DispatchQueue.main.async {
-                                self.extractAndStoreProductFromJSON(transcript)
-                                // بعد استخراج، تحقق من checkoutReady
-                                if self.checkoutReady && !self.orderItems.isEmpty {
-                                    // إذا checkoutReady = true، اضبط navigationTarget
-                                    self.navigationTarget = "order_batch"
-                                    self.pendingNavigation = "order_batch"
-                                    print("✅ checkoutReady = true, set navigationTarget to order_batch")
-                                } else {
-                                    print("⚠️ checkoutReady = false or no items, NOT navigating")
-                                }
-                            }
-                        }
-                    }
+                    print("📦 Total args so far: \(pendingFunctionCallArgs[callId] ?? "")")
+                    print("==========================================\n")
                     return
                 }
                 
                 // ✅ Handle completed function call
-                if let type = json["type"] as? String,
-                   type == "response.function_call_arguments.done",
+                if type == "response.function_call_arguments.done",
                    let callId = json["call_id"] as? String,
                    let functionName = json["name"] as? String {
-                    print("🎯 Function call completed: \(functionName), callId: \(callId)")
+                    print("✅ FUNCTION CALL COMPLETED:")
+                    print("🔑 Call ID: \(callId)")
+                    print("📛 Function Name: \(functionName)")
+                    
                     if let arguments = pendingFunctionCallArgs[callId] {
-                        print("📦 Full arguments: \(arguments)")
+                        print("📦 Full Arguments: \(arguments)")
+                        
                         if let argsData = arguments.data(using: .utf8),
                            let argsJson = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
-                            print("✅ Parsed args JSON: \(argsJson)")
+                            
+                            // ✅ طباعة JSON بشكل منسق
+                            if let jsonPretty = try? JSONSerialization.data(withJSONObject: argsJson, options: .prettyPrinted),
+                               let jsonString = String(data: jsonPretty, encoding: .utf8) {
+                                print("\n📦 ========== FUNCTION CALL JSON ==========")
+                                print(jsonString)
+                                print("==========================================\n")
+                            }
+                            
                             if let page = argsJson["page"] as? String {
-                                print("🎯 Found function call \(functionName): \(page)")
-                                // Force main thread update
+                                print("🎯 Page found: \(page)")
                                 DispatchQueue.main.async {
-                                    // Set navigationTarget و pendingNavigation معاً للضمان
                                     self.navigationTarget = page
                                     self.pendingNavigation = page
-                                    print("✅ Set navigationTarget and pendingNavigation: \(page)")
+                                    // إذا كان add_product أو order_batch، استخرج JSON
+                                    if page == "add_product" || page == "order_batch" {
+                                        self.extractAndStoreProductFromJSON(arguments)
+                                    }
                                 }
                             } else {
-                                print("❌ No 'page' key in args")
+                                print("⚠️ No 'page' key in function call arguments")
                             }
                         } else {
-                            print("❌ Failed to parse args JSON")
+                            print("❌ Failed to parse function call arguments as JSON")
                         }
                     } else {
-                        print("❌ No pending args for \(callId)")
+                        print("⚠️ No pending arguments for call ID: \(callId)")
                     }
                     pendingFunctionCallArgs.removeValue(forKey: callId)
+                    print("==========================================\n")
                     return
                 }
                 
-                // ✅ Handle function call from output_item (legacy fallback)
-                if let type = json["type"] as? String,
-                   type == "response.output_item.added" || type == "response.output_item.done",
-                   let item = json["item"] as? [String: Any],
-                   let itemType = item["type"] as? String,
-                   itemType == "function_call",
-                   let functionName = item["name"] as? String,
-                   functionName == "redirect_to_page",
-                   let arguments = item["arguments"] as? String,
-                   let argsData = arguments.data(using: .utf8),
-                   let argsJson = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
-                   let page = argsJson["page"] as? String {
-                    print("🎯 Found function call redirect_to_page (legacy): \(page)")
-                    DispatchQueue.main.async {
-                        self.navigationTarget = page
-                    }
-                    return
-                }
+                // ✅ Handle other message types
+                print("📋 Other message type: \(type)")
+                print("==========================================\n")
                 
-                // تحقق إذا كان navigation event مباشر
-                if let type = json["type"] as? String, type == "navigation",
-                   let page = json["page"] as? String {
-                    print("🎯 Navigation received: \(page)")
-                    DispatchQueue.main.async {
-                        self.navigationTarget = page
-                    }
-                    return
-                }
+                // ⚠️ مهم: ما نستخرج JSON من delta events - فقط من transcript الكامل
+                // الـ delta events بتحتوي على قطع صغيرة من النص (مثلاً "page" فقط)
+                // والـ JSON الكامل موجود في response.audio_transcript.done
+                return
             }
             
-            // ✅ بحث فشل، حاول extract من الـ raw text
-            if txt.contains("\"page\"") {
-                print("🔍 Searching for navigation JSON in raw text...")
+            // ✅ Handle navigation event مباشر (مش delta event)
+            if let data = txt.data(using: .utf8),
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+               let type = json["type"] as? String,
+               type == "navigation",
+               let page = json["page"] as? String {
+                DispatchQueue.main.async {
+                    self.navigationTarget = page
+                }
+                return
+            }
+            
+            // ✅ استخراج JSON فقط من نص كامل (مش delta events)
+            // التحقق إن الرسالة مش delta event قبل الاستخراج
+            if txt.contains("\"page\"") && !txt.contains("\"type\":\"response.audio_transcript.delta\"") {
+                print("\n🔍 ========== FOUND 'page' IN RAW TEXT (NOT DELTA) ==========")
+                print("📄 Raw text: \(String(txt.prefix(500)))")
+                print("==========================================\n")
+                
                 if let result = extractNavigationFromText(txt) {
-                    print("✅ Found navigation command: \(result)")
                     DispatchQueue.main.async {
                         self.navigationTarget = result.page
                         self.cliqAmount = result.amount
                         self.cliqPhoneNumber = result.phone
                         self.cliqAlias = result.alias
-                        // ✅ استخرج بيانات المنتج إذا كان add_product أو order_batch
                         if result.page == "add_product" || result.page == "order_batch" {
-                            print("🛒 Extracting product data from JSON...")
                             self.extractAndStoreProductFromJSON(txt)
                         }
                     }
@@ -948,21 +900,17 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
     }
     
     private func extractNavigationFromText(_ text: String) -> CliQTransferData? {
-        print("🔧 extractNavigationFromText called with: '\(text)'")
         // Handle multiline JSON and normalize all whitespace
         let cleaned = text.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
-            // Replace multiple spaces with single space
             .components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
-        print("🔧 After cleaning: '\(cleaned)'")
         
         // Try to extract full JSON object
         if let jsonRange = cleaned.range(of: "{\"") {
             let after = String(cleaned[jsonRange.lowerBound...])
             if let jsonEnd = after.range(of: "}") {
                 let jsonString = String(after[..<jsonEnd.upperBound])
-                print("🔍 Found JSON: '\(jsonString)'")
                 
                 if let jsonData = jsonString.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
@@ -972,13 +920,12 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                     let alias = json["alias"] as? String
                     let checkout = json["checkout"] as? Bool
                     
-                    print("✅ Extracted: page=\(page), amount=\(amount ?? "nil"), phone=\(phone ?? "nil"), alias=\(alias ?? "nil"), checkout=\(checkout?.description ?? "nil")")
                     return CliQTransferData(page: page, amount: amount, phone: phone, alias: alias, checkout: checkout)
                 }
             }
         }
         
-        // Fallback: Try simple pattern matching - flexible spacing after colon
+        // Fallback: Try simple pattern matching
         if let pageRange = cleaned.range(of: "\"page\"") {
             let afterPage = String(cleaned[pageRange.upperBound...])
             if let colonRange = afterPage.range(of: ":"),
@@ -986,21 +933,56 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                 let afterQuote = afterPage[firstQuote.upperBound...]
                 if let secondQuote = afterQuote.range(of: "\"") {
                     let pageName = String(afterQuote[..<secondQuote.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    print("📱 Extracted page name (flexible): '\(pageName)'")
                     return CliQTransferData(page: pageName, amount: nil, phone: nil, alias: nil, checkout: nil)
                 }
             }
         }
         
-        print("❌ Could not extract JSON from text")
         return nil
+    }
+    
+    // MARK: - Log Messages to Server
+    private func logMessageToServer(message: String, role: String) {
+        guard !message.isEmpty else { return }
+        
+        let url = URL(string: "\(backendURL)/v1/conversation/log")!
+        var request = URLRequest(url: url)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.timeoutInterval = 5.0
+        
+        let body: [String: Any] = [
+            "message": message,
+            "role": role,
+            "session_id": sessionID
+        ]
+        
+        do {
+            request.httpBody = try JSONSerialization.data(withJSONObject: body)
+            
+            print("📤 Sending message to server: \(role) - \(message.prefix(50))...")
+            
+            URLSession.shared.dataTask(with: request) { data, response, error in
+                if let error = error {
+                    print("❌ Failed to log message to server: \(error.localizedDescription)")
+                    return
+                }
+                
+                if let httpResponse = response as? HTTPURLResponse {
+                    if httpResponse.statusCode == 200 {
+                        print("✅ Message logged successfully to server")
+                    } else {
+                        print("⚠️ Server returned status code: \(httpResponse.statusCode)")
+                    }
+                }
+            }.resume()
+        } catch {
+            print("❌ Failed to serialize message for server: \(error)")
+        }
     }
     
     // MARK: - Extract Product from JSON
     private func extractAndStoreProductFromJSON(_ text: String) {
-        print("🔍 extractAndStoreProductFromJSON called with text length: \(text.count)")
-        print("📝 Full text preview: \(String(text.prefix(500)))")
-        
         // ✅ دعم عدة JSON objects في نفس النص (للمنتجات المتعددة)
         var jsonStrings: [String] = []
         
@@ -1008,10 +990,40 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
         var searchRange = text.startIndex..<text.endIndex
         while let codeBlockStart = text.range(of: "```json", range: searchRange),
               let codeBlockEnd = text.range(of: "```", range: codeBlockStart.upperBound..<text.endIndex) {
-            let jsonStr = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
+            let codeBlockContent = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            jsonStrings.append(jsonStr)
-            print("📦 Found JSON #\(jsonStrings.count) in ```json code block")
+            
+            // ✅ إذا كان الـ code block يحتوي على عدة JSON objects (مفصولة بأسطر)
+            // استخرج كل JSON object منفصل
+            let lines = codeBlockContent.components(separatedBy: .newlines)
+            var currentJson = ""
+            var braceCount = 0
+            
+            for line in lines {
+                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+                if trimmedLine.isEmpty { continue }
+                
+                currentJson += (currentJson.isEmpty ? "" : "\n") + trimmedLine
+                braceCount += trimmedLine.filter { $0 == "{" }.count
+                braceCount -= trimmedLine.filter { $0 == "}" }.count
+                
+                // إذا وصلنا لـ JSON كامل (عدد الأقواس متساوي)
+                if braceCount == 0 && !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
+                    if !jsonStrings.contains(currentJson) {
+                        jsonStrings.append(currentJson)
+                    }
+                    currentJson = ""
+                    braceCount = 0
+                }
+            }
+            
+            // إذا بقي JSON غير مكتمل، جرب إضافته
+            if !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
+                if !jsonStrings.contains(currentJson) {
+                    jsonStrings.append(currentJson)
+                }
+            }
+            
             searchRange = codeBlockEnd.upperBound..<text.endIndex
         }
         
@@ -1019,15 +1031,40 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
         searchRange = text.startIndex..<text.endIndex
         while let codeBlockStart = text.range(of: "```", range: searchRange),
               let codeBlockEnd = text.range(of: "```", range: codeBlockStart.upperBound..<text.endIndex) {
-            let jsonStr = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
+            let codeBlockContent = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
                 .trimmingCharacters(in: .whitespacesAndNewlines)
-            // تحقق من أنه JSON وليس نص عادي
-            if jsonStr.contains("{") && jsonStr.contains("\"page\"") {
-                if !jsonStrings.contains(jsonStr) {
-                    jsonStrings.append(jsonStr)
-                    print("📦 Found JSON #\(jsonStrings.count) in generic ``` code block")
+            
+            // ✅ إذا كان الـ code block يحتوي على عدة JSON objects (مفصولة بأسطر)
+            // استخرج كل JSON object منفصل
+            let lines = codeBlockContent.components(separatedBy: .newlines)
+            var currentJson = ""
+            var braceCount = 0
+            
+            for line in lines {
+                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
+                if trimmedLine.isEmpty { continue }
+                
+                currentJson += (currentJson.isEmpty ? "" : "\n") + trimmedLine
+                braceCount += trimmedLine.filter { $0 == "{" }.count
+                braceCount -= trimmedLine.filter { $0 == "}" }.count
+                
+                // إذا وصلنا لـ JSON كامل (عدد الأقواس متساوي)
+                if braceCount == 0 && !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
+                    if !jsonStrings.contains(currentJson) {
+                        jsonStrings.append(currentJson)
+                    }
+                    currentJson = ""
+                    braceCount = 0
                 }
             }
+            
+            // إذا بقي JSON غير مكتمل، جرب إضافته
+            if !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
+                if !jsonStrings.contains(currentJson) {
+                    jsonStrings.append(currentJson)
+                }
+            }
+            
             searchRange = codeBlockEnd.upperBound..<text.endIndex
         }
         
@@ -1041,7 +1078,6 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                 // تحقق من أنه يحتوي على "page" (JSON navigation)
                 if jsonStr.contains("\"page\"") {
                     jsonStrings.append(jsonStr)
-                    print("📦 Found JSON #\(jsonStrings.count) using { brace matching")
                 }
                 // jsonEnd هو String.Index يشير إلى الموضع بعد نهاية JSON
                 searchRange = jsonEnd..<text.endIndex
@@ -1057,138 +1093,89 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                     .trimmingCharacters(in: .whitespacesAndNewlines)
                 if jsonStr.contains("\"page\"") {
                     jsonStrings.append(jsonStr)
-                    print("📦 Found JSON using fallback: first { to last }")
                 }
             }
         }
         
         if jsonStrings.isEmpty {
-            print("❌ Could not extract any JSON from text")
             return
         }
         
-        print("✅ Found \(jsonStrings.count) JSON object(s) in text")
-        
         // معالجة كل JSON object
         for (index, jsonStr) in jsonStrings.enumerated() {
-            print("📝 Processing JSON #\(index + 1)/\(jsonStrings.count) (length: \(jsonStr.count)): \(String(jsonStr.prefix(200)))...")
-            
             guard let jsonData = jsonStr.data(using: .utf8),
                   let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                print("❌ Could not parse JSON #\(index + 1): \(String(jsonStr.prefix(100)))")
                 continue
+            }
+            
+            // ✅ طباعة JSON بشكل منسق
+            if let jsonPretty = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
+               let jsonString = String(data: jsonPretty, encoding: .utf8) {
+                print("\n📦 ========== JSON #\(index + 1) ==========")
+                print(jsonString)
+                print("========================================\n")
             }
             
             let page = json["page"] as? String ?? ""
             
             // ✅ Handle order_batch - استخرج كل المنتجات من array
             if page == "order_batch" {
-                print("📦 Processing order_batch...")
-                
-                // ✅ تحقق من checkout: true
                 let checkout = json["checkout"] as? Bool ?? false
-                print("🛒 checkout value in JSON: \(checkout)")
+                print("🛒 order_batch detected - checkout: \(checkout)")
                 
                 if !checkout {
-                    print("⚠️ WARNING: order_batch without checkout: true - NOT processing")
+                    print("⚠️ SKIPPING: order_batch without checkout: true")
                     DispatchQueue.main.async {
                         self.checkoutReady = false
                     }
-                    continue // انتقل للـ JSON التالي
+                    continue
                 }
                 
-                print("✅ checkout: true confirmed - processing order_batch")
+                print("✅ Processing order_batch with checkout: true")
                 
-                // استخرج orders array
                 if let orders = json["orders"] as? [[String: Any]] {
-                    print("✅ Found \(orders.count) orders in order_batch")
                     var batchItems: [OrderItem] = []
-                    for (index, order) in orders.enumerated() {
-                        print("📦 Processing order \(index + 1)/\(orders.count)")
+                    for order in orders {
                         if let item = extractSingleProductFromJSON(order) {
                             batchItems.append(item)
-                            print("✅ Added item: \(item.name), price: \(item.price), qty: \(item.quantity)")
-                        } else {
-                            print("⚠️ Failed to extract item from order \(index + 1)")
                         }
                     }
                     
                     if !batchItems.isEmpty {
                         DispatchQueue.main.async {
                             self.orderItems = batchItems
-                            self.checkoutReady = true // تأكد من checkoutReady = true
-                            
-                            // استخرج totals من JSON إذا موجود
-                            if let totals = json["totals"] as? [String: Any],
-                               let itemsSubtotal = totals["items_subtotal"] as? Double {
-                                // استخدم items_subtotal من JSON
-                                print("💰 Using items_subtotal from JSON: \(itemsSubtotal)")
-                            } else {
-                                print("⚠️ No totals found in JSON, will calculate from items")
-                            }
-                            
-                            print("✅ Loaded \(batchItems.count) items from order_batch")
-                            print("✅ checkoutReady set to true")
-                            print("📋 Items summary:")
-                            for item in batchItems {
-                                print("   - \(item.name): \(item.price) × \(item.quantity) = \(item.total)")
-                            }
+                            self.checkoutReady = true
                         }
                     } else {
-                        print("⚠️ No items extracted from order_batch")
                         DispatchQueue.main.async {
                             self.checkoutReady = false
                         }
                     }
-                } else {
-                    print("⚠️ No 'orders' array found in order_batch JSON")
-                    print("📝 Available keys in JSON: \(json.keys.joined(separator: ", "))")
-                    
-                    // محاولة أخيرة: ابحث عن products أو items بأسماء مختلفة
-                    if let products = json["products"] as? [[String: Any]] {
-                        print("📦 Found 'products' array instead of 'orders'")
-                        var batchItems: [OrderItem] = []
-                        for product in products {
-                            if let item = extractSingleProductFromJSON(product) {
-                                batchItems.append(item)
-                            }
-                        }
-                        if !batchItems.isEmpty {
-                            DispatchQueue.main.async {
-                                self.orderItems = batchItems
-                                // تحقق من checkout
-                                let checkout = json["checkout"] as? Bool ?? false
-                                self.checkoutReady = checkout
-                                print("✅ Loaded \(batchItems.count) items from 'products' array, checkout: \(checkout)")
-                            }
-                        }
-                    }
-                    continue // انتقل للـ JSON التالي
                 }
-                continue // انتقل للـ JSON التالي بعد معالجة order_batch
+                continue
             }
             
             // ✅ Handle add_product
             guard page == "add_product" else {
-                print("⚠️ JSON #\(index + 1) page is not 'add_product' or 'order_batch', skipping")
-                continue // انتقل للـ JSON التالي
+                continue
             }
             
-            print("✅ JSON parsed successfully, extracting product data...")
+            // ✅ تحقق من ready: true قبل إضافة المنتج
+            let ready = json["ready"] as? Bool ?? false
+            print("🔍 add_product detected - ready: \(ready)")
+            
+            if !ready {
+                print("⚠️ SKIPPING: add_product without 'ready: true'")
+                continue
+            }
+            
+            print("✅ Processing add_product with ready: true")
             
             // استخرج بيانات المنتج من add_product
             if let item = extractSingleProductFromJSON(json) {
                 DispatchQueue.main.async {
                     self.orderItems.append(item)
-                    print("✅ Added product to cart: \(item.name), price=\(item.price), quantity=\(item.quantity)")
-                    print("📊 Total items in cart now: \(self.orderItems.count)")
-                    for (index, existingItem) in self.orderItems.enumerated() {
-                        print("   [\(index + 1)] \(existingItem.name) - \(existingItem.price) × \(existingItem.quantity)")
-                    }
                 }
-            } else {
-                print("❌ Failed to extract product from add_product JSON")
-                print("📝 JSON keys: \(json.keys.joined(separator: ", "))")
             }
         } // end of for loop
     }
@@ -1239,11 +1226,9 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
         // ✅ أولوية 1: استخدم unit_price من JSON إذا كان موجود
         if let unitPriceFromJSON = json["unit_price"] as? Double {
             price = unitPriceFromJSON
-            print("💰 Using unit_price from JSON: \(price)")
         } else if let unitPriceString = json["unit_price"] as? String,
                   let unitPriceDouble = Double(unitPriceString) {
             price = unitPriceDouble
-            print("💰 Using unit_price from JSON (string): \(price)")
         } else if let catalogPrice = ProductPriceCatalog.getPrice(
             category: category,
             productName: productName,
@@ -1255,10 +1240,8 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
         ) {
             // ✅ أولوية 2: استخدم السعر من الكتالوج
             price = catalogPrice
-            print("💰 Using price from catalog: \(price)")
         } else {
             // ✅ أولوية 3: fallback prices
-            // سعر افتراضي إذا ما لقى في الكتالوج
             if weight.contains("250") || weight.contains("250g") {
                 price = category.contains("Turkish") ? 3.5 : (category.contains("Espresso") ? 4.0 : 3.0)
             } else if weight.contains("500") || weight.contains("500g") {
@@ -1266,14 +1249,12 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
             } else if weight.contains("1kg") || weight.contains("1") {
                 price = category.contains("Turkish") ? 19.824 : (category.contains("Espresso") ? 23.822 : 10.0)
             } else if category.contains("Brewed") {
-                // Brewed category: Turkish Coffee Sada/Medium/Sweet
-                price = 2.0 // default للـ Brewed
+                price = 2.0
             } else if category.contains("Cups") {
                 price = cupType?.contains("Espresso") == true ? 2.0 : (cupType?.contains("Latte") == true || cupType?.contains("Cappuccino") == true ? 3.5 : 2.5)
             } else {
-                price = 5.0 // default
+                price = 5.0
             }
-            print("⚠️ Using fallback price: \(price)")
         }
         
         // تحديد اسم الصورة بناءً على نوع المنتج
