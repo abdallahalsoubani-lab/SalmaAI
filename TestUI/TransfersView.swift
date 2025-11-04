@@ -218,7 +218,8 @@ struct QuickTransferChip: View {
 }
 
 // MARK: - Theme helpers
-public extension Color {
+extension Color {
+    /// درجة قريبة من لقطة الشاشة
     static let brandBlue = Color(red: 0.04, green: 0.29, blue: 0.56)
 }
 

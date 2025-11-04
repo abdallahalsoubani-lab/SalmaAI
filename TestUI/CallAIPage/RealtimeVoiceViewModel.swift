@@ -34,157 +34,12 @@ struct CliQTransferData {
     let amount: String?
     let phone: String?
     let alias: String?
-    let checkout: Bool? // للتحقق من checkout في order_batch
     
-    init(page: String, amount: String? = nil, phone: String? = nil, alias: String? = nil, checkout: Bool? = nil) {
+    init(page: String, amount: String? = nil, phone: String? = nil, alias: String? = nil) {
         self.page = page
         self.amount = amount
         self.phone = phone
         self.alias = alias
-        self.checkout = checkout
-    }
-}
-
-// MARK: - Product Price Catalog (الأسعار الحقيقية)
-struct ProductPriceCatalog {
-    static let prices: [String: Double] = [
-        // قهوة تركية 1 كغم (الأسعار الحقيقية)
-        "Turkish_medium_cardamom_1kg": 19.824,      // قهوة تركية وسط مع هيل 1 كغم
-        "Turkish_dark_none_1kg": 19.824,            // قهوة تركية غامقة بدون هيل 1 كغم
-        "Turkish_decaf_cardamom_1kg": 24.106,       // قهوة تركية منزوعة الكافيين مع هيل 1 كغم
-        "Turkish_light_cardamom_1kg": 19.824,
-        "Turkish_medium_none_1kg": 19.824,
-        "Turkish_dark_cardamom_1kg": 19.824,
-        
-        // قهوة إسبرسو 1 كغم (الأسعار الحقيقية)
-        "Espresso_ground_1kg": 23.822,              // قهوة إسبرسو مطحونة 1 كغم
-        "Espresso_beans_1kg": 23.822,               // حبوب إسبرسو 1 كغم
-        
-        // الكاسات (الأسعار الحقيقية)
-        "Cup_Levant_Espresso_50ml": 4.500,          // كوب ليفانت إسبريسو 50 مل
-        "Cup_Levant_Espresso_100ml": 6.000,         // كوب ليفانت إسبريسو 100 مل
-        "Cup_Jasmina_Latte": 5.000,                  // كوب ياسمينا للاتيه
-        "Cup_Jasmina_Cappuccino": 5.000,            // كوب ياسمينا للكابتشينو
-        "Cup_Jasmina_double_glass": 4.000,           // كوب ياسمينا زجاج مزدوج
-        "Cup_Turkish_plain_100ml": 2.000,            // كوب قهوة تركية سادة 100 مل
-        "Cup_Turkish_medium_100ml": 2.000,          // كوب قهوة تركية وسط 100 مل
-        "Cup_Turkish_sweet_100ml": 2.000,            // كوب قهوة تركية حلوة 100 مل
-        "Cup_Turkish_Sada_100": 2.000,              // Turkish Coffee Sada 100ml (Brewed category)
-        "Cup_Sada_small": 2.000,
-        "Cup_Sada_medium": 2.500,
-        "Cup_Sada_large": 3.000,
-    ]
-    
-    static func getPrice(category: String, productName: String, weight: String?, cardamom: String?, grind: String?, cupType: String?, size: String?) -> Double? {
-        // بناء مفتاح البحث
-        var key = ""
-        
-        if category.contains("Turkish") || category.contains("Turkish Coffee") || productName.contains("تركية") || productName.contains("Turkish") {
-            // قهوة تركية
-            var roast = "medium" // default
-            let productNameLower = productName.lowercased()
-            let categoryLower = category.lowercased()
-            
-            if productNameLower.contains("غامقة") || productNameLower.contains("dark") || productNameLower.contains("غامق") {
-                roast = "dark"
-            } else if productNameLower.contains("فاتحة") || productNameLower.contains("light") || productNameLower.contains("فاتح") {
-                roast = "light"
-            } else if productNameLower.contains("منزوعة") || productNameLower.contains("decaf") || productNameLower.contains("منزوع") || productNameLower.contains("كافيين") {
-                roast = "decaf"
-            } else if productNameLower.contains("وسط") || productNameLower.contains("medium") {
-                roast = "medium"
-            }
-            
-            let cardamomValue = cardamom?.lowercased() ?? ""
-            let cardamomStr: String
-            if cardamomValue == "none" || cardamomValue.isEmpty || cardamomValue.contains("بدون") {
-                cardamomStr = "none"
-            } else {
-                cardamomStr = "cardamom"
-            }
-            
-            let weightStr = weight?.lowercased() ?? ""
-            if weightStr.contains("1kg") == true || weightStr.contains("1") == true || weightStr.contains("كيلو") == true || weightStr.contains("كغم") == true {
-                key = "Turkish_\(roast)_\(cardamomStr)_1kg"
-            } else if weightStr.contains("500") == true {
-                key = "Turkish_\(roast)_\(cardamomStr)_500g"
-            } else if weightStr.contains("250") == true {
-                key = "Turkish_\(roast)_\(cardamomStr)_250g"
-            }
-        } else if category.contains("Espresso") || productName.contains("إسبرسو") || productName.contains("Espresso") {
-            // إسبرسو
-            let grindStr = (grind?.lowercased().contains("beans") == true || grind?.lowercased().contains("حب") == true || grind?.lowercased().contains("bean") == true) ? "beans" : "ground"
-            let weightStr = weight?.lowercased() ?? ""
-            if weightStr.contains("1kg") == true || weightStr.contains("1") == true || weightStr.contains("كيلو") == true || weightStr.contains("كغم") == true {
-                key = "Espresso_\(grindStr)_1kg"
-            }
-        } else if category.contains("Brewed") || (category.contains("Brewed") && productName.contains("Turkish Coffee")) {
-            // Brewed category (Turkish Coffee Sada/Medium/Sweet)
-            let productNameLower = productName.lowercased()
-            let sizeStr = (size ?? "").lowercased()
-            
-            if productNameLower.contains("sada") || productNameLower.contains("سادة") || productNameLower.contains("plain") {
-                if sizeStr.contains("100") || sizeStr.contains("100ml") {
-                    key = "Cup_Turkish_Sada_100"
-                }
-            } else if productNameLower.contains("medium") || productNameLower.contains("وسط") {
-                if sizeStr.contains("100") || sizeStr.contains("100ml") {
-                    key = "Cup_Turkish_medium_100ml"
-                }
-            } else if productNameLower.contains("sweet") || productNameLower.contains("حلوة") {
-                if sizeStr.contains("100") || sizeStr.contains("100ml") {
-                    key = "Cup_Turkish_sweet_100ml"
-                }
-            }
-        } else if category.contains("Cups") || category.contains("Cup") || productName.contains("كوب") {
-            // الكاسات (Cups category)
-            let cupTypeStr = (cupType ?? "").lowercased()
-            let sizeStr = (size ?? "").lowercased()
-            let productNameLower = productName.lowercased()
-            
-            if (cupTypeStr.contains("levant") || productNameLower.contains("ليفانت")) && (cupTypeStr.contains("espresso") || productNameLower.contains("إسبريسو")) {
-                if sizeStr.contains("50") || sizeStr.contains("50ml") {
-                    key = "Cup_Levant_Espresso_50ml"
-                } else if sizeStr.contains("100") || sizeStr.contains("100ml") {
-                    key = "Cup_Levant_Espresso_100ml"
-                }
-            } else if cupTypeStr.contains("jasmina") || cupTypeStr.contains("ياسمينا") || productNameLower.contains("ياسمينا") || productNameLower.contains("jasmina") {
-                if cupTypeStr.contains("latte") || productNameLower.contains("لاتيه") || productNameLower.contains("latte") {
-                    key = "Cup_Jasmina_Latte"
-                } else if cupTypeStr.contains("cappuccino") || productNameLower.contains("كابتشينو") || productNameLower.contains("cappuccino") {
-                    key = "Cup_Jasmina_Cappuccino"
-                } else if cupTypeStr.contains("زجاج") || cupTypeStr.contains("glass") || productNameLower.contains("زجاج") || productNameLower.contains("glass") {
-                    key = "Cup_Jasmina_double_glass"
-                }
-            } else if cupTypeStr.contains("turkish") || cupTypeStr.contains("تركية") || productNameLower.contains("تركية") {
-                if sizeStr.contains("100") || sizeStr.contains("100ml") {
-                    if productNameLower.contains("سادة") || productNameLower.contains("plain") {
-                        key = "Cup_Turkish_plain_100ml"
-                    } else if productNameLower.contains("وسط") || productNameLower.contains("medium") {
-                        key = "Cup_Turkish_medium_100ml"
-                    } else if productNameLower.contains("حلوة") || productNameLower.contains("sweet") {
-                        key = "Cup_Turkish_sweet_100ml"
-                    }
-                }
-            } else if cupTypeStr.contains("sada") || cupTypeStr.contains("سادة") || productNameLower.contains("سادة") {
-                if sizeStr.contains("small") || sizeStr.contains("صغير") {
-                    key = "Cup_Sada_small"
-                } else if sizeStr.contains("medium") || sizeStr.contains("وسط") {
-                    key = "Cup_Sada_medium"
-                } else if sizeStr.contains("large") || sizeStr.contains("كبير") {
-                    key = "Cup_Sada_large"
-                } else {
-                    key = "Cup_Sada_small" // default
-                }
-            }
-        }
-        
-        // البحث في القائمة
-        if let price = prices[key] {
-            return price
-        }
-        
-        return nil
     }
 }
 
@@ -204,31 +59,14 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
     @Published var cliqPhoneNumber: String? = nil
     @Published var cliqAlias: String? = nil
     
-    // MARK: - Order Parameters
-    @Published var orderItems: [OrderItem] = [] {
-        didSet {
-            print("\n🛒 ========== CART UPDATED ==========")
-            print("📊 Total items: \(orderItems.count)")
-            for (index, item) in orderItems.enumerated() {
-                print("   [\(index + 1)] \(item.name) - \(item.price) × \(item.quantity) = \(item.total)")
-            }
-            print("=====================================\n")
-        }
-    }
-    @Published var orderId: String? = nil
-    @Published var checkoutReady: Bool = false // true فقط عندما يكون checkout: true في JSON
-    
     // MARK: - Session Management
     var sessionID: String?  // ✅ للاستخدام في polling
     
     // MARK: - Navigation detection
     private var lastAIText: String = ""
     private var navigationTimer: Timer?
-    // ✅ الـ IP الخارجي للسيرفر (تم التحقق: 35.202.32.216)
-    private let backendURL = "http://35.202.32.216:8000"
+    private let backendURL = "http://34.132.130.63:8000"
     private var pendingFunctionCallArgs: [String: String] = [:] // لتجميع function arguments
-    private var pendingTranscript: String = "" // لتجميع transcript deltas قبل استخراج JSON
-    private var pendingContentPart: String = "" // لتجميع content_part deltas قبل استخراج JSON
 
     // MARK: - WebRTC
     private var pcStored: RTCPeerConnection?
@@ -289,12 +127,10 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             try configureAudioSession() // تهيئة أولية (تسمح بالمزج والتسجيل)
 
             // 1) احصل على client_secret من السيرفر (الصوت مقفول cedar بالسيرفر)
-            let tokenURL = URL(string: "\(backendURL)/v1/realtime/token")!
-            
+            let tokenURL = URL(string: "http://34.132.130.63:8000/v1/realtime/token")!
             var tokenReq = URLRequest(url: tokenURL)
             tokenReq.httpMethod = "POST"
-            tokenReq.timeoutInterval = 30.0
-            
+
             let (tokData, tokResp) = try await URLSession.shared.data(for: tokenReq)
             guard let http = tokResp as? HTTPURLResponse, http.statusCode < 300 else {
                 let body = String(data: tokData, encoding: .utf8) ?? ""
@@ -309,6 +145,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 throw NSError(domain: "RealtimeVoice", code: -11,
                               userInfo: [NSLocalizedDescriptionKey: "client_secret missing/empty"])
             }
+            print("🟢 clientSecret length:", clientSecret.count)
 
             // 2) PeerConnection
             let config = RTCConfiguration()
@@ -348,6 +185,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             }
             var txErr: NSError?
             _ = tx.setDirection(.sendRecv, error: &txErr)
+            if let e = txErr { print("⚠️ setDirection error:", e.localizedDescription) }
 
             // 4) Offer + Local SDP
             let offerConstraints = RTCMediaConstraints(
@@ -396,6 +234,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             // ✅ Set session ID
             let newSessionID = UUID().uuidString
             self.sessionID = newSessionID
+            print("📱 Session ID: \(newSessionID)")
 
             DispatchQueue.main.async {
                 self.isConnected = true
@@ -404,27 +243,20 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 
                 // استعادة أي pending navigation
                 if let pendingNav = self.pendingNavigation {
+                    print("🔔 Restoring pending navigation: \(pendingNav)")
                     self.navigationTarget = pendingNav
                     self.pendingNavigation = nil
                 }
             }
+            print("✅ Connected to Realtime Voice")
 
         } catch {
-            let errorDescription = error.localizedDescription
-            let nsError = error as NSError
-            print("❌ Realtime connect error:")
-            print("   Description: \(errorDescription)")
-            print("   Domain: \(nsError.domain)")
-            print("   Code: \(nsError.code)")
-            if let userInfo = nsError.userInfo as? [String: Any] {
-                print("   UserInfo: \(userInfo)")
-            }
-            
             DispatchQueue.main.async {
-                self.messages.append(ChatMessage(text: "❌ \(errorDescription)", isUser: false))
+                self.messages.append(ChatMessage(text: "❌ \(error.localizedDescription)", isUser: false))
                 self.isConnected = false
                 self.resetBandsToSilence()
             }
+            print("❌ Realtime connect error:", error.localizedDescription)
             disconnect()
         }
     }
@@ -436,6 +268,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         // حفظ أي pending navigation قبل الانفصال
         if let navTarget = navigationTarget {
             pendingNavigation = navTarget
+            print("📦 Saved pending navigation: \(navTarget)")
         }
         
         pcStored?.close()
@@ -444,8 +277,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         resetBandsToSilence()
         pendingFunctionCallArgs.removeAll() // ✅ نظف function call args
         navigationTarget = nil // ✅ امسح navigationTarget عند الانفصال
-        // لا تمسح orderItems - احتفظ بالمنتجات حتى بعد disconnect (لحفظ السلة)
-        checkoutReady = false // امسح checkoutReady عند disconnect
+        print("🛑 Disconnected from Realtime")
     }
     
     // MARK: - Navigation Polling
@@ -458,11 +290,13 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                 await self?.checkForNavigationCommand()
             }
         }
+        print("✅ Started navigation polling")
     }
     
     func stopNavigationPolling() {
         navigationTimer?.invalidate()
         navigationTimer = nil
+        print("🛑 Stopped navigation polling")
     }
     
     private func checkForNavigationCommand() async {
@@ -478,6 +312,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
                hasNav == true,
                let page = json["page"] as? String {
                 
+                print("🎯 Navigation command received: \(page)")
                 DispatchQueue.main.async {
                     self.navigationTarget = page
                 }
@@ -548,6 +383,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
         cfg.categoryOptions = [.mixWithOthers, .defaultToSpeaker, .allowBluetooth, .allowBluetoothA2DP]
         try? rtc.setConfiguration(cfg)
         try? rtc.setActive(true)
+        print("🔁 AudioSession reconfigured (isCaptured=\(isScreenCaptured))")
     }
 
     private func waitForIceGatheringComplete(using pc: RTCPeerConnection, timeout: TimeInterval) async throws {
@@ -643,13 +479,16 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
 extension RealtimeVoiceViewModel: RTCPeerConnectionDelegate {
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange stateChanged: RTCSignalingState) {
+        print("📡 Signaling:", stateChanged.rawValue)
     }
 
     func peerConnectionShouldNegotiate(_ peerConnection: RTCPeerConnection) {
+        print("🤝 Should negotiate")
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCIceConnectionState) {
+        print("🔗 ICE Conn State:", newState.rawValue)
         if newState == .disconnected || newState == .failed || newState == .closed {
             DispatchQueue.main.async { self.isConnected = false }
         }
@@ -657,38 +496,55 @@ extension RealtimeVoiceViewModel: RTCPeerConnectionDelegate {
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didChange newState: RTCIceGatheringState) {
+        print("🧊 ICE Gathering:", newState.rawValue)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didGenerate candidate: RTCIceCandidate) {
+        print("➕ ICE candidate generated")
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didRemove candidates: [RTCIceCandidate]) {
+        print("➖ ICE candidates removed:", candidates.count)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didOpen dataChannel: RTCDataChannel) {
+        print("📨 DataChannel opened:", dataChannel.label)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didAdd stream: RTCMediaStream) {
+        print("📥 Legacy: didAdd stream:", stream.streamId)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didRemove stream: RTCMediaStream) {
+        print("🧹 Legacy: didRemove stream:", stream.streamId)
     }
 
     func peerConnection(_ peerConnection: RTCPeerConnection,
                         didAdd rtpReceiver: RTCRtpReceiver,
                         streams: [RTCMediaStream]) {
+        if rtpReceiver.track is RTCAudioTrack {
+            print("🔊 Remote audio track (Unified Plan):", rtpReceiver.track?.trackId ?? "-")
+        }
     }
 }
 
 // MARK: - RTCDataChannelDelegate
 extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
     func dataChannelDidChangeState(_ dataChannel: RTCDataChannel) {
+        print("🧵 DataChannel '\(dataChannel.label)' state: \(dataChannel.readyState.rawValue)")
+        
         guard dataChannel.readyState == .open, dataChannel.label == "oai-events" else { return }
+        
+        // ✅ FIXED: إلغاء الـ greeting التلقائي - الآن الـ AI رح يرد طبيعي أول ما المستخدم يحكي
+        // الـ greeting محدد في السيناريو على السيرفر وبيشتغل تلقائياً
+        // هذا يحسّن الثبات لأنه ما فيش conflict بين تعليمات التطبيق والسيرفر
+        
+        print("✅ DataChannel ready - waiting for user to speak")
         
         // ===========================================
         // OPTIONAL: لو بدك auto-greeting (بدون conflict)
@@ -716,183 +572,148 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
 
     func dataChannel(_ dataChannel: RTCDataChannel, didReceiveMessageWith buffer: RTCDataBuffer) {
         if !buffer.isBinary, let txt = String(data: buffer.data, encoding: .utf8) {
-            // ✅ طباعة جميع الرسائل الواردة للتحقق
+            // Print response in requested format
+            print("\n===========> RESPONSE")
+            print(txt)
+            print("===========> END RESPONSE\n")
+            
+            // Log only if contains interesting data
+            if txt.contains("function") || txt.contains("page") || txt.contains("navigation") {
+                print("🔍 FOUND FUNCTION/PAGE/Navigation in message!")
+            }
+            
+            // ✅ تحقق إذا كان navigation event مباشر
             if let data = txt.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let type = json["type"] as? String {
-                print("\n📨 ========== MESSAGE RECEIVED ==========")
-                print("📋 Type: \(type)")
+               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
                 
-                // ✅ Handle audio transcript done - extract JSON from transcript
-                if type == "response.audio_transcript.done",
-                   let transcript = json["transcript"] as? String {
-                    
-                    print("📝 AUDIO TRANSCRIPT:")
-                    print("📏 Length: \(transcript.count) characters")
-                    print("📄 Content: \(transcript)")
-                    print("🔍 Contains 'page': \(transcript.contains("\"page\""))")
-                    print("🔍 Contains 'add_product': \(transcript.contains("add_product"))")
-                    print("🔍 Contains 'order_batch': \(transcript.contains("order_batch"))")
-                    
-                    // ✅ طباعة رد أمجد في console التطبيق (نفس شكل السيرفر)
-                    print("")
-                    print("🤖 Reply: \(transcript)")
-                    print("")
-                    
-                    // ✅ إرسال رد أمجد للسيرفر للتسجيل
-                    self.logMessageToServer(message: transcript, role: "assistant")
-                    
-                    // ابحث عن JSON في الـ transcript
-                    if transcript.contains("\"page\"") {
-                        print("✅ Found 'page' in transcript - extracting JSON...")
+                // استخرج text من response.text.done
+                if let responseText = json["text"] as? String {
+                    print("📝 AI text response: \(responseText)")
+                    print("🔍 Calling extractNavigationFromText...")
+                    // ابحث عن navigation command في النص
+                    if let result = extractNavigationFromText(responseText) {
+                        print("✅ Found navigation in text: \(result)")
+                        print("🎯 Setting navigationTarget to: \(result.page)")
                         DispatchQueue.main.async {
-                            self.extractAndStoreProductFromJSON(transcript)
+                            print("📱 INSIDE MAIN THREAD - Setting navigationTarget")
+                            self.navigationTarget = result.page
+                            self.cliqAmount = result.amount
+                            self.cliqPhoneNumber = result.phone
+                            print("📱 navigationTarget value after set: \(self.navigationTarget ?? "nil")")
                         }
+                        return
                     } else {
-                        print("⚠️ Transcript does not contain 'page' - skipping JSON extraction")
+                        print("❌ extractNavigationFromText returned nil")
                     }
-                    print("==========================================\n")
-                    return
-                }
-                
-                // ✅ Handle content_part added - جمع deltas للـ JSON
-                if type == "response.content_part.added",
-                   let delta = json["delta"] as? String {
-                    print("📝 CONTENT PART DELTA:")
-                    print("📄 Delta: \(delta)")
-                    pendingContentPart += delta
-                    print("📦 Total content so far: \(String(pendingContentPart.prefix(200)))")
-                    print("==========================================\n")
-                    return
-                }
-                
-                // ✅ Handle content_part done - استخراج JSON من content الكامل
-                if type == "response.content_part.done",
-                   let content = json["content"] as? String {
-                    print("📝 CONTENT PART DONE:")
-                    print("📏 Length: \(content.count) characters")
-                    print("📄 Content: \(content)")
-                    print("🔍 Contains 'page': \(content.contains("\"page\""))")
-                    
-                    // استخدم content الكامل (أو pendingContentPart إذا كان content فارغ)
-                    let fullContent = content.isEmpty ? pendingContentPart : content
-                    
-                    // ابحث عن JSON في الـ content
-                    if fullContent.contains("\"page\"") {
-                        print("✅ Found 'page' in content_part - extracting JSON...")
-                        DispatchQueue.main.async {
-                            self.extractAndStoreProductFromJSON(fullContent)
-                        }
-                    } else {
-                        print("⚠️ Content part does not contain 'page' - skipping JSON extraction")
-                    }
-                    
-                    // امسح pendingContentPart بعد الاستخدام
-                    pendingContentPart = ""
-                    print("==========================================\n")
-                    return
                 }
                 
                 // ✅ Handle function call arguments (delta - جمع القطع)
-                if type == "response.function_call_arguments.delta",
+                if let type = json["type"] as? String,
+                   type == "response.function_call_arguments.delta",
                    let callId = json["call_id"] as? String,
                    let delta = json["delta"] as? String {
-                    print("📦 FUNCTION CALL ARGUMENTS DELTA:")
-                    print("🔑 Call ID: \(callId)")
-                    print("📄 Delta: \(delta)")
+                    print("📝 Collecting function call args for \(callId): \(delta)")
                     if pendingFunctionCallArgs[callId] == nil {
                         pendingFunctionCallArgs[callId] = ""
                     }
                     pendingFunctionCallArgs[callId] = (pendingFunctionCallArgs[callId] ?? "") + delta
-                    print("📦 Total args so far: \(pendingFunctionCallArgs[callId] ?? "")")
-                    print("==========================================\n")
+                    print("📦 Total args for \(callId): \(pendingFunctionCallArgs[callId] ?? "")")
+                    return
+                }
+                
+                // ✅ Handle audio transcript done - extract JSON from transcript
+                if let type = json["type"] as? String,
+                   type == "response.audio_transcript.done",
+                   let transcript = json["transcript"] as? String {
+                    print("📝 Audio transcript done: \(transcript)")
+                    // ابحث عن JSON navigation command في الـ transcript
+                    if let result = extractNavigationFromText(transcript) {
+                        print("✅ Found navigation in transcript: page=\(result.page), amount=\(result.amount ?? "nil"), phone=\(result.phone ?? "nil"), alias=\(result.alias ?? "nil")")
+                        DispatchQueue.main.async {
+                            self.navigationTarget = result.page
+                            self.pendingNavigation = result.page
+                            self.cliqAmount = result.amount
+                            self.cliqPhoneNumber = result.phone
+                            self.cliqAlias = result.alias
+                            print("✅ Set navigation data")
+                        }
+                    }
                     return
                 }
                 
                 // ✅ Handle completed function call
-                if type == "response.function_call_arguments.done",
+                if let type = json["type"] as? String,
+                   type == "response.function_call_arguments.done",
                    let callId = json["call_id"] as? String,
                    let functionName = json["name"] as? String {
-                    print("✅ FUNCTION CALL COMPLETED:")
-                    print("🔑 Call ID: \(callId)")
-                    print("📛 Function Name: \(functionName)")
-                    
+                    print("🎯 Function call completed: \(functionName), callId: \(callId)")
                     if let arguments = pendingFunctionCallArgs[callId] {
-                        print("📦 Full Arguments: \(arguments)")
-                        
+                        print("📦 Full arguments: \(arguments)")
                         if let argsData = arguments.data(using: .utf8),
                            let argsJson = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any] {
-                            
-                            // ✅ طباعة JSON بشكل منسق
-                            if let jsonPretty = try? JSONSerialization.data(withJSONObject: argsJson, options: .prettyPrinted),
-                               let jsonString = String(data: jsonPretty, encoding: .utf8) {
-                                print("\n📦 ========== FUNCTION CALL JSON ==========")
-                                print(jsonString)
-                                print("==========================================\n")
-                            }
-                            
+                            print("✅ Parsed args JSON: \(argsJson)")
                             if let page = argsJson["page"] as? String {
-                                print("🎯 Page found: \(page)")
+                                print("🎯 Found function call \(functionName): \(page)")
+                                // Force main thread update
                                 DispatchQueue.main.async {
+                                    // Set navigationTarget و pendingNavigation معاً للضمان
                                     self.navigationTarget = page
                                     self.pendingNavigation = page
-                                    // إذا كان add_product أو order_batch، استخرج JSON
-                                    if page == "add_product" || page == "order_batch" {
-                                        self.extractAndStoreProductFromJSON(arguments)
-                                    }
+                                    print("✅ Set navigationTarget and pendingNavigation: \(page)")
                                 }
                             } else {
-                                print("⚠️ No 'page' key in function call arguments")
+                                print("❌ No 'page' key in args")
                             }
                         } else {
-                            print("❌ Failed to parse function call arguments as JSON")
+                            print("❌ Failed to parse args JSON")
                         }
                     } else {
-                        print("⚠️ No pending arguments for call ID: \(callId)")
+                        print("❌ No pending args for \(callId)")
                     }
                     pendingFunctionCallArgs.removeValue(forKey: callId)
-                    print("==========================================\n")
                     return
                 }
                 
-                // ✅ Handle other message types
-                print("📋 Other message type: \(type)")
-                print("==========================================\n")
-                
-                // ⚠️ مهم: ما نستخرج JSON من delta events - فقط من transcript الكامل
-                // الـ delta events بتحتوي على قطع صغيرة من النص (مثلاً "page" فقط)
-                // والـ JSON الكامل موجود في response.audio_transcript.done
-                return
-            }
-            
-            // ✅ Handle navigation event مباشر (مش delta event)
-            if let data = txt.data(using: .utf8),
-               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-               let type = json["type"] as? String,
-               type == "navigation",
-               let page = json["page"] as? String {
-                DispatchQueue.main.async {
-                    self.navigationTarget = page
+                // ✅ Handle function call from output_item (legacy fallback)
+                if let type = json["type"] as? String,
+                   type == "response.output_item.added" || type == "response.output_item.done",
+                   let item = json["item"] as? [String: Any],
+                   let itemType = item["type"] as? String,
+                   itemType == "function_call",
+                   let functionName = item["name"] as? String,
+                   functionName == "redirect_to_page",
+                   let arguments = item["arguments"] as? String,
+                   let argsData = arguments.data(using: .utf8),
+                   let argsJson = try? JSONSerialization.jsonObject(with: argsData) as? [String: Any],
+                   let page = argsJson["page"] as? String {
+                    print("🎯 Found function call redirect_to_page (legacy): \(page)")
+                    DispatchQueue.main.async {
+                        self.navigationTarget = page
+                    }
+                    return
                 }
-                return
+                
+                // تحقق إذا كان navigation event مباشر
+                if let type = json["type"] as? String, type == "navigation",
+                   let page = json["page"] as? String {
+                    print("🎯 Navigation received: \(page)")
+                    DispatchQueue.main.async {
+                        self.navigationTarget = page
+                    }
+                    return
+                }
             }
             
-            // ✅ استخراج JSON فقط من نص كامل (مش delta events)
-            // التحقق إن الرسالة مش delta event قبل الاستخراج
-            if txt.contains("\"page\"") && !txt.contains("\"type\":\"response.audio_transcript.delta\"") {
-                print("\n🔍 ========== FOUND 'page' IN RAW TEXT (NOT DELTA) ==========")
-                print("📄 Raw text: \(String(txt.prefix(500)))")
-                print("==========================================\n")
-                
+            // ✅ بحث فشل، حاول extract من الـ raw text
+            if txt.contains("\"page\"") {
+                print("🔍 Searching for navigation JSON in raw text...")
                 if let result = extractNavigationFromText(txt) {
+                    print("✅ Found navigation command: \(result)")
                     DispatchQueue.main.async {
                         self.navigationTarget = result.page
                         self.cliqAmount = result.amount
                         self.cliqPhoneNumber = result.phone
                         self.cliqAlias = result.alias
-                        if result.page == "add_product" || result.page == "order_batch" {
-                            self.extractAndStoreProductFromJSON(txt)
-                        }
                     }
                 }
             }
@@ -900,17 +721,21 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
     }
     
     private func extractNavigationFromText(_ text: String) -> CliQTransferData? {
+        print("🔧 extractNavigationFromText called with: '\(text)'")
         // Handle multiline JSON and normalize all whitespace
         let cleaned = text.replacingOccurrences(of: "\n", with: " ")
             .replacingOccurrences(of: "\r", with: " ")
             .replacingOccurrences(of: "\t", with: " ")
+            // Replace multiple spaces with single space
             .components(separatedBy: .whitespaces).filter { !$0.isEmpty }.joined(separator: " ")
+        print("🔧 After cleaning: '\(cleaned)'")
         
         // Try to extract full JSON object
         if let jsonRange = cleaned.range(of: "{\"") {
             let after = String(cleaned[jsonRange.lowerBound...])
             if let jsonEnd = after.range(of: "}") {
                 let jsonString = String(after[..<jsonEnd.upperBound])
+                print("🔍 Found JSON: '\(jsonString)'")
                 
                 if let jsonData = jsonString.data(using: .utf8),
                    let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] {
@@ -918,14 +743,14 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                     let amount = json["amount"] as? String
                     let phone = json["phone"] as? String
                     let alias = json["alias"] as? String
-                    let checkout = json["checkout"] as? Bool
                     
-                    return CliQTransferData(page: page, amount: amount, phone: phone, alias: alias, checkout: checkout)
+                    print("✅ Extracted: page=\(page), amount=\(amount ?? "nil"), phone=\(phone ?? "nil"), alias=\(alias ?? "nil")")
+                    return CliQTransferData(page: page, amount: amount, phone: phone, alias: alias)
                 }
             }
         }
         
-        // Fallback: Try simple pattern matching
+        // Fallback: Try simple pattern matching - flexible spacing after colon
         if let pageRange = cleaned.range(of: "\"page\"") {
             let afterPage = String(cleaned[pageRange.upperBound...])
             if let colonRange = afterPage.range(of: ":"),
@@ -933,376 +758,13 @@ extension RealtimeVoiceViewModel: RTCDataChannelDelegate {
                 let afterQuote = afterPage[firstQuote.upperBound...]
                 if let secondQuote = afterQuote.range(of: "\"") {
                     let pageName = String(afterQuote[..<secondQuote.lowerBound]).trimmingCharacters(in: .whitespaces)
-                    return CliQTransferData(page: pageName, amount: nil, phone: nil, alias: nil, checkout: nil)
+                    print("📱 Extracted page name (flexible): '\(pageName)'")
+                    return CliQTransferData(page: pageName, amount: nil, phone: nil)
                 }
             }
         }
         
-        return nil
-    }
-    
-    // MARK: - Log Messages to Server
-    private func logMessageToServer(message: String, role: String) {
-        guard !message.isEmpty else { return }
-        
-        let url = URL(string: "\(backendURL)/v1/conversation/log")!
-        var request = URLRequest(url: url)
-        request.httpMethod = "POST"
-        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.timeoutInterval = 5.0
-        
-        let body: [String: Any] = [
-            "message": message,
-            "role": role,
-            "session_id": sessionID
-        ]
-        
-        do {
-            request.httpBody = try JSONSerialization.data(withJSONObject: body)
-            
-            print("📤 Sending message to server: \(role) - \(message.prefix(50))...")
-            
-            URLSession.shared.dataTask(with: request) { data, response, error in
-                if let error = error {
-                    print("❌ Failed to log message to server: \(error.localizedDescription)")
-                    return
-                }
-                
-                if let httpResponse = response as? HTTPURLResponse {
-                    if httpResponse.statusCode == 200 {
-                        print("✅ Message logged successfully to server")
-                    } else {
-                        print("⚠️ Server returned status code: \(httpResponse.statusCode)")
-                    }
-                }
-            }.resume()
-        } catch {
-            print("❌ Failed to serialize message for server: \(error)")
-        }
-    }
-    
-    // MARK: - Extract Product from JSON
-    private func extractAndStoreProductFromJSON(_ text: String) {
-        // ✅ دعم عدة JSON objects في نفس النص (للمنتجات المتعددة)
-        var jsonStrings: [String] = []
-        
-        // محاولة 1: استخرج جميع JSON من code blocks (```json ... ```)
-        var searchRange = text.startIndex..<text.endIndex
-        while let codeBlockStart = text.range(of: "```json", range: searchRange),
-              let codeBlockEnd = text.range(of: "```", range: codeBlockStart.upperBound..<text.endIndex) {
-            let codeBlockContent = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // ✅ إذا كان الـ code block يحتوي على عدة JSON objects (مفصولة بأسطر)
-            // استخرج كل JSON object منفصل
-            let lines = codeBlockContent.components(separatedBy: .newlines)
-            var currentJson = ""
-            var braceCount = 0
-            
-            for line in lines {
-                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-                if trimmedLine.isEmpty { continue }
-                
-                currentJson += (currentJson.isEmpty ? "" : "\n") + trimmedLine
-                braceCount += trimmedLine.filter { $0 == "{" }.count
-                braceCount -= trimmedLine.filter { $0 == "}" }.count
-                
-                // إذا وصلنا لـ JSON كامل (عدد الأقواس متساوي)
-                if braceCount == 0 && !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
-                    if !jsonStrings.contains(currentJson) {
-                        jsonStrings.append(currentJson)
-                    }
-                    currentJson = ""
-                    braceCount = 0
-                }
-            }
-            
-            // إذا بقي JSON غير مكتمل، جرب إضافته
-            if !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
-                if !jsonStrings.contains(currentJson) {
-                    jsonStrings.append(currentJson)
-                }
-            }
-            
-            searchRange = codeBlockEnd.upperBound..<text.endIndex
-        }
-        
-        // محاولة 2: استخرج جميع JSON من generic code blocks (``` ... ```)
-        searchRange = text.startIndex..<text.endIndex
-        while let codeBlockStart = text.range(of: "```", range: searchRange),
-              let codeBlockEnd = text.range(of: "```", range: codeBlockStart.upperBound..<text.endIndex) {
-            let codeBlockContent = String(text[codeBlockStart.upperBound..<codeBlockEnd.lowerBound])
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            
-            // ✅ إذا كان الـ code block يحتوي على عدة JSON objects (مفصولة بأسطر)
-            // استخرج كل JSON object منفصل
-            let lines = codeBlockContent.components(separatedBy: .newlines)
-            var currentJson = ""
-            var braceCount = 0
-            
-            for line in lines {
-                let trimmedLine = line.trimmingCharacters(in: .whitespaces)
-                if trimmedLine.isEmpty { continue }
-                
-                currentJson += (currentJson.isEmpty ? "" : "\n") + trimmedLine
-                braceCount += trimmedLine.filter { $0 == "{" }.count
-                braceCount -= trimmedLine.filter { $0 == "}" }.count
-                
-                // إذا وصلنا لـ JSON كامل (عدد الأقواس متساوي)
-                if braceCount == 0 && !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
-                    if !jsonStrings.contains(currentJson) {
-                        jsonStrings.append(currentJson)
-                    }
-                    currentJson = ""
-                    braceCount = 0
-                }
-            }
-            
-            // إذا بقي JSON غير مكتمل، جرب إضافته
-            if !currentJson.isEmpty && currentJson.contains("{") && currentJson.contains("\"page\"") {
-                if !jsonStrings.contains(currentJson) {
-                    jsonStrings.append(currentJson)
-                }
-            }
-            
-            searchRange = codeBlockEnd.upperBound..<text.endIndex
-        }
-        
-        // محاولة 3: استخرج جميع JSON objects مباشرة من النص (بدون code blocks)
-        if jsonStrings.isEmpty {
-            searchRange = text.startIndex..<text.endIndex
-            while let jsonStart = text.range(of: "{\"", range: searchRange),
-                  let jsonEnd = findMatchingBrace(in: text, startIndex: jsonStart.lowerBound) {
-                let jsonStr = String(text[jsonStart.lowerBound..<jsonEnd])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                // تحقق من أنه يحتوي على "page" (JSON navigation)
-                if jsonStr.contains("\"page\"") {
-                    jsonStrings.append(jsonStr)
-                }
-                // jsonEnd هو String.Index يشير إلى الموضع بعد نهاية JSON
-                searchRange = jsonEnd..<text.endIndex
-            }
-        }
-        
-        // محاولة 4: fallback - استخرج من أول { لحد آخر }
-        if jsonStrings.isEmpty {
-            if let firstBrace = text.firstIndex(of: "{"),
-               let lastBrace = text.lastIndex(of: "}"),
-               firstBrace < lastBrace {
-                let jsonStr = String(text[firstBrace...lastBrace])
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
-                if jsonStr.contains("\"page\"") {
-                    jsonStrings.append(jsonStr)
-                }
-            }
-        }
-        
-        if jsonStrings.isEmpty {
-            return
-        }
-        
-        // معالجة كل JSON object
-        for (index, jsonStr) in jsonStrings.enumerated() {
-            guard let jsonData = jsonStr.data(using: .utf8),
-                  let json = try? JSONSerialization.jsonObject(with: jsonData) as? [String: Any] else {
-                continue
-            }
-            
-            // ✅ طباعة JSON بشكل منسق
-            if let jsonPretty = try? JSONSerialization.data(withJSONObject: json, options: .prettyPrinted),
-               let jsonString = String(data: jsonPretty, encoding: .utf8) {
-                print("\n📦 ========== JSON #\(index + 1) ==========")
-                print(jsonString)
-                print("========================================\n")
-            }
-            
-            let page = json["page"] as? String ?? ""
-            
-            // ✅ Handle order_batch - استخرج كل المنتجات من array
-            if page == "order_batch" {
-                let checkout = json["checkout"] as? Bool ?? false
-                print("🛒 order_batch detected - checkout: \(checkout)")
-                
-                if !checkout {
-                    print("⚠️ SKIPPING: order_batch without checkout: true")
-                    DispatchQueue.main.async {
-                        self.checkoutReady = false
-                    }
-                    continue
-                }
-                
-                print("✅ Processing order_batch with checkout: true")
-                
-                if let orders = json["orders"] as? [[String: Any]] {
-                    var batchItems: [OrderItem] = []
-                    for order in orders {
-                        if let item = extractSingleProductFromJSON(order) {
-                            batchItems.append(item)
-                        }
-                    }
-                    
-                    if !batchItems.isEmpty {
-                        DispatchQueue.main.async {
-                            self.orderItems = batchItems
-                            self.checkoutReady = true
-                        }
-                    } else {
-                        DispatchQueue.main.async {
-                            self.checkoutReady = false
-                        }
-                    }
-                }
-                continue
-            }
-            
-            // ✅ Handle add_product
-            guard page == "add_product" else {
-                continue
-            }
-            
-            // ✅ تحقق من ready: true قبل إضافة المنتج
-            let ready = json["ready"] as? Bool ?? false
-            print("🔍 add_product detected - ready: \(ready)")
-            
-            if !ready {
-                print("⚠️ SKIPPING: add_product without 'ready: true'")
-                continue
-            }
-            
-            print("✅ Processing add_product with ready: true")
-            
-            // استخرج بيانات المنتج من add_product
-            if let item = extractSingleProductFromJSON(json) {
-                DispatchQueue.main.async {
-                    self.orderItems.append(item)
-                }
-            }
-        } // end of for loop
-    }
-    
-    // MARK: - Extract Single Product from JSON Object
-    private func extractSingleProductFromJSON(_ json: [String: Any]) -> OrderItem? {
-        // استخرج بيانات المنتج
-        let productName = json["product_name"] as? String ?? json["category"] as? String ?? "منتج"
-        let category = json["category"] as? String ?? ""
-        let weight = json["weight"] as? String ?? ""
-        let cardamom = json["cardamom"] as? String
-        let grind = json["grind"] as? String
-        let quantity = (json["quantity"] as? Int) ?? (json["quantity"] as? String).flatMap { Int($0) } ?? 1
-        
-        // بناء اسم المنتج مع التفاصيل
-        var fullProductName = productName
-        let cupType = json["cup_type"] as? String
-        let size = json["size"] as? String
-        
-        // للـ Brewed category: استخدم product_name و size
-        if category.contains("Brewed") {
-            if let sizeStr = size, !sizeStr.isEmpty {
-                fullProductName += " (\(sizeStr))"
-            }
-        } else {
-            // للـ Turkish Coffee: استخدم weight, cardamom, grind
-            if !weight.isEmpty {
-                fullProductName += " (\(weight))"
-            }
-            if let cardamom = cardamom, cardamom != "none" {
-                fullProductName += " - \(cardamom)"
-            }
-            if let grind = grind, !grind.isEmpty {
-                fullProductName += " - \(grind)"
-            }
-            // للـ Cups category: استخدم cup_type و size
-            if let cupTypeStr = cupType, !cupTypeStr.isEmpty {
-                fullProductName += " - \(cupTypeStr)"
-            }
-            if let sizeStr = size, !sizeStr.isEmpty {
-                fullProductName += " (\(sizeStr))"
-            }
-        }
-        
-        // حساب السعر: أولوية لـ unit_price من JSON، ثم الكتالوج، ثم fallback
-        let price: Double
-        
-        // ✅ أولوية 1: استخدم unit_price من JSON إذا كان موجود
-        if let unitPriceFromJSON = json["unit_price"] as? Double {
-            price = unitPriceFromJSON
-        } else if let unitPriceString = json["unit_price"] as? String,
-                  let unitPriceDouble = Double(unitPriceString) {
-            price = unitPriceDouble
-        } else if let catalogPrice = ProductPriceCatalog.getPrice(
-            category: category,
-            productName: productName,
-            weight: weight,
-            cardamom: cardamom,
-            grind: grind,
-            cupType: cupType,
-            size: size
-        ) {
-            // ✅ أولوية 2: استخدم السعر من الكتالوج
-            price = catalogPrice
-        } else {
-            // ✅ أولوية 3: fallback prices
-            if weight.contains("250") || weight.contains("250g") {
-                price = category.contains("Turkish") ? 3.5 : (category.contains("Espresso") ? 4.0 : 3.0)
-            } else if weight.contains("500") || weight.contains("500g") {
-                price = category.contains("Turkish") ? 6.5 : (category.contains("Espresso") ? 7.5 : 5.5)
-            } else if weight.contains("1kg") || weight.contains("1") {
-                price = category.contains("Turkish") ? 19.824 : (category.contains("Espresso") ? 23.822 : 10.0)
-            } else if category.contains("Brewed") {
-                price = 2.0
-            } else if category.contains("Cups") {
-                price = cupType?.contains("Espresso") == true ? 2.0 : (cupType?.contains("Latte") == true || cupType?.contains("Cappuccino") == true ? 3.5 : 2.5)
-            } else {
-                price = 5.0
-            }
-        }
-        
-        // تحديد اسم الصورة بناءً على نوع المنتج
-        let imageName: String?
-        if category.contains("Turkish Coffee") && !weight.isEmpty {
-            // قهوة تركية بالوزن (كيلو/جرام) → صورة الباكيت
-            imageName = "turkish_coffee_packet"
-        } else if category.contains("Brewed") || (category.contains("Cups") && (productName.contains("Turkish") || productName.contains("تركية"))) {
-            // كاسة قهوة تركية → صورة الكاسة التركية
-            imageName = "turkish_coffee_cup"
-        } else if category.contains("Cups") && (cupType?.contains("Espresso") == true || productName.contains("Espresso") || productName.contains("إسبريسو")) {
-            // كاسة إسبريسو → صورة كاسة الإسبريسو
-            imageName = "espresso_cup"
-        } else if category.contains("Cups") {
-            // كاسات أخرى (Latte, Cappuccino, etc.)
-            imageName = "coffee_cup"
-        } else {
-            // منتجات أخرى (إسبريسو بالوزن، أمريكان، etc.)
-            imageName = "coffee_packet"
-        }
-        
-        // إنشاء OrderItem
-        return OrderItem(
-            name: fullProductName,
-            price: price,
-            quantity: quantity,
-            imageName: imageName
-        )
-    }
-    
-    // MARK: - Helper: Find Matching Brace
-    private func findMatchingBrace(in text: String, startIndex: String.Index) -> String.Index? {
-        var depth = 0
-        var index = startIndex
-        
-        while index < text.endIndex {
-            let char = text[index]
-            if char == "{" {
-                depth += 1
-            } else if char == "}" {
-                depth -= 1
-                if depth == 0 {
-                    return text.index(after: index)
-                }
-            }
-            index = text.index(after: index)
-        }
-        
+        print("❌ Could not extract JSON from text")
         return nil
     }
 }

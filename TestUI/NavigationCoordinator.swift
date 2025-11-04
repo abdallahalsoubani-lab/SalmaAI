@@ -20,48 +20,11 @@ struct CliQReviewParams: Hashable {
     }
 }
 
-// MARK: - Order Item Model
-struct OrderItem: Identifiable, Hashable {
-    let id: String
-    let name: String
-    let price: Double
-    let quantity: Int
-    let imageName: String? // اسم الصورة في Assets
-    
-    var total: Double {
-        price * Double(quantity)
-    }
-    
-    init(id: String = UUID().uuidString, name: String, price: Double, quantity: Int = 1, imageName: String? = nil) {
-        self.id = id
-        self.name = name
-        self.price = price
-        self.quantity = quantity
-        self.imageName = imageName
-    }
-}
-
-// MARK: - Order Details Parameters
-struct OrderDetailsParams: Hashable {
-    let items: [OrderItem]
-    let total: Double
-    let orderId: String?
-    let orderDate: Date?
-    
-    init(items: [OrderItem], total: Double? = nil, orderId: String? = nil, orderDate: Date? = nil) {
-        self.items = items
-        self.total = total ?? items.reduce(0) { $0 + $1.total }
-        self.orderId = orderId
-        self.orderDate = orderDate ?? Date()
-    }
-}
-
 // MARK: - Navigation Pages Enum
 enum NavigationPage: Hashable {
     case aiCall
     case transfers
     case cliqReview(params: CliQReviewParams)
-    case orderDetails(params: OrderDetailsParams)
     case language
 }
 
@@ -122,8 +85,6 @@ struct NavigationCoordinatorModifier: ViewModifier {
                 phoneNumber: params.phoneNumber,
                 alias: params.alias
             )
-        case .orderDetails(let params):
-            OrderDetailsView(items: params.items, total: params.total, orderId: params.orderId, orderDate: params.orderDate)
         case .language:
             LanguageView()
         }
