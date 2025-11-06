@@ -65,7 +65,7 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
     // MARK: - Navigation detection
     private var lastAIText: String = ""
     private var navigationTimer: Timer?
-    private let backendURL = "http://34.132.130.63:8000"
+    private let backendURL = "http://35.202.32.216:8000"
     private var pendingFunctionCallArgs: [String: String] = [:] // لتجميع function arguments
 
     // MARK: - WebRTC
@@ -122,32 +122,52 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
 
     // MARK: - Connect
     func connectToRealtime() async {
+        print("🚀 [CONNECT] Starting connection to Realtime...")
         do {
+            print("🎤 [CONNECT] Checking microphone permission...")
             try await ensureMicPermission()
+            print("✅ [CONNECT] Microphone permission granted")
+            
+            print("🔧 [CONNECT] Configuring audio session...")
             try configureAudioSession() // تهيئة أولية (تسمح بالمزج والتسجيل)
+            print("✅ [CONNECT] Audio session configured")
 
             // 1) احصل على client_secret من السيرفر (الصوت مقفول cedar بالسيرفر)
-            let tokenURL = URL(string: "http://34.132.130.63:8000/v1/realtime/token")!
+            let tokenURLString = "\(backendURL)/v1/realtime/token"
+            print("🌐 [CONNECT] Requesting token from: \(tokenURLString)")
+            guard let tokenURL = URL(string: tokenURLString) else {
+                throw NSError(domain: "RealtimeVoice", code: -9,
+                              userInfo: [NSLocalizedDescriptionKey: "Invalid token URL: \(tokenURLString)"])
+            }
             var tokenReq = URLRequest(url: tokenURL)
             tokenReq.httpMethod = "POST"
+            tokenReq.timeoutInterval = 30.0 // ✅ زيادة timeout
+            print("📤 [CONNECT] Sending POST request to token endpoint...")
 
             let (tokData, tokResp) = try await URLSession.shared.data(for: tokenReq)
+            print("📥 [CONNECT] Received response, status code: \((tokResp as? HTTPURLResponse)?.statusCode ?? -1)")
             guard let http = tokResp as? HTTPURLResponse, http.statusCode < 300 else {
                 let body = String(data: tokData, encoding: .utf8) ?? ""
+                print("❌ [CONNECT] Token request failed - Status: \((tokResp as? HTTPURLResponse)?.statusCode ?? -1)")
+                print("❌ [CONNECT] Response body: \(body)")
                 throw NSError(domain: "RealtimeVoice", code: -10,
                               userInfo: [NSLocalizedDescriptionKey: "Token HTTP error: \((tokResp as? HTTPURLResponse)?.statusCode ?? -1)\n\(body)"])
             }
+            print("✅ [CONNECT] Token request successful, parsing response...")
             guard
                 let json = try JSONSerialization.jsonObject(with: tokData) as? [String: Any],
                 let clientSecret = (json["client_secret"] as? [String: Any])?["value"] as? String,
                 !clientSecret.isEmpty
             else {
+                let responseStr = String(data: tokData, encoding: .utf8) ?? "nil"
+                print("❌ [CONNECT] Failed to parse client_secret from response: \(responseStr)")
                 throw NSError(domain: "RealtimeVoice", code: -11,
                               userInfo: [NSLocalizedDescriptionKey: "client_secret missing/empty"])
             }
-            print("🟢 clientSecret length:", clientSecret.count)
+            print("🟢 [CONNECT] clientSecret received, length: \(clientSecret.count)")
 
             // 2) PeerConnection
+            print("🔗 [CONNECT] Creating RTCPeerConnection...")
             let config = RTCConfiguration()
             config.sdpSemantics = .unifiedPlan
             let constraints = RTCMediaConstraints(mandatoryConstraints: nil, optionalConstraints: nil)
@@ -155,22 +175,28 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             guard let pc = factory.peerConnection(with: config,
                                                   constraints: constraints,
                                                   delegate: self) else {
+                print("❌ [CONNECT] Failed to create RTCPeerConnection")
                 throw NSError(domain: "RealtimeVoice", code: -12,
                               userInfo: [NSLocalizedDescriptionKey: "Failed to create RTCPeerConnection"])
             }
             self.pcStored = pc
+            print("✅ [CONNECT] RTCPeerConnection created")
 
             // 2.5) DataChannel
+            print("📨 [CONNECT] Creating DataChannel...")
             let dcConfig = RTCDataChannelConfiguration()
             dcConfig.isOrdered = true
             let eventsDC = pc.dataChannel(forLabel: "oai-events", configuration: dcConfig)
             eventsDC?.delegate = self
             self.eventsDC = eventsDC
+            print("✅ [CONNECT] DataChannel created")
 
             // 3) Add mic track (إرسال صوت المستخدم)
+            print("🎤 [CONNECT] Adding microphone audio track...")
             let audioSource = factory.audioSource(with: nil)
             let audioTrack = factory.audioTrack(with: audioSource, trackId: "mic")
             pc.add(audioTrack, streamIds: ["local_stream"])
+            print("✅ [CONNECT] Microphone track added")
 
             // Ensure send/recv
             let tx: RTCRtpTransceiver
@@ -188,21 +214,27 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             if let e = txErr { print("⚠️ setDirection error:", e.localizedDescription) }
 
             // 4) Offer + Local SDP
+            print("📝 [CONNECT] Creating SDP offer...")
             let offerConstraints = RTCMediaConstraints(
                 mandatoryConstraints: ["OfferToReceiveAudio":"true"],
                 optionalConstraints: nil
             )
             let offer = try await pc.offer(for: offerConstraints)
             try await pc.setLocalDescription(offer)
+            print("✅ [CONNECT] SDP offer created and set as local description")
 
             // 5) ICE
+            print("🧊 [CONNECT] Waiting for ICE gathering...")
             try await waitForIceGatheringComplete(using: pc, timeout: 8.0)
             guard let localSDP = pc.localDescription?.sdp, !localSDP.isEmpty else {
+                print("❌ [CONNECT] Local SDP is empty")
                 throw NSError(domain: "RealtimeVoice", code: -13,
                               userInfo: [NSLocalizedDescriptionKey: "Local SDP empty"])
             }
+            print("✅ [CONNECT] ICE gathering complete, SDP length: \(localSDP.count)")
 
             // 6) Send SDP to OpenAI Realtime
+            print("🌐 [CONNECT] Sending SDP to OpenAI Realtime API...")
             var req = URLRequest(url: URL(string: "https://api.openai.com/v1/realtime?model=gpt-realtime")!)
             req.httpMethod = "POST"
             req.setValue("Bearer \(clientSecret)", forHTTPHeaderField: "Authorization")
@@ -210,10 +242,15 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             req.setValue("application/sdp", forHTTPHeaderField: "Content-Type")
             req.setValue("application/sdp", forHTTPHeaderField: "Accept")
             req.httpBody = localSDP.data(using: .utf8)
+            req.timeoutInterval = 30.0 // ✅ زيادة timeout
+            print("📤 [CONNECT] SDP request sent to OpenAI...")
 
             let (ansData, ansResp) = try await URLSession.shared.data(for: req)
+            print("📥 [CONNECT] Received SDP answer, status: \((ansResp as? HTTPURLResponse)?.statusCode ?? -1)")
             if let http = ansResp as? HTTPURLResponse, http.statusCode >= 300 {
                 let body = String(data: ansData, encoding: .utf8) ?? ""
+                print("❌ [CONNECT] OpenAI API error - Status: \(http.statusCode)")
+                print("❌ [CONNECT] Response body: \(body)")
                 throw NSError(domain: "OpenAIRealtime", code: http.statusCode,
                               userInfo: [NSLocalizedDescriptionKey: "HTTP \(http.statusCode): \(body)"])
             }
@@ -221,12 +258,16 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             guard let sdpAnswer = String(data: ansData, encoding: .utf8),
                   sdpAnswer.contains("a=ice-ufrag") else {
                 let raw = String(data: ansData, encoding: .utf8) ?? ""
+                print("❌ [CONNECT] Invalid SDP answer from OpenAI")
+                print("❌ [CONNECT] Raw response: \(raw)")
                 throw NSError(domain: "OpenAIRealtime", code: -14,
                               userInfo: [NSLocalizedDescriptionKey: "No SDP answer. Got: \(raw)"])
             }
 
+            print("✅ [CONNECT] Valid SDP answer received, setting remote description...")
             let answer = RTCSessionDescription(type: .answer, sdp: sdpAnswer)
             try await pc.setRemoteDescription(answer)
+            print("✅ [CONNECT] Remote description set successfully")
 
             // ✅ Start stats metering
             startStatsMetering(on: pc)
@@ -251,12 +292,31 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
             print("✅ Connected to Realtime Voice")
 
         } catch {
+            let errorMsg = error.localizedDescription
+            print("❌ [CONNECT] Connection failed!")
+            print("❌ [CONNECT] Error description: \(errorMsg)")
+            
+            // Extract NSError details if available
+            let nsError = error as NSError
+            print("❌ [CONNECT] Error code: \(nsError.code)")
+            print("❌ [CONNECT] Error domain: \(nsError.domain)")
+            
+            if let underlyingError = nsError.userInfo[NSUnderlyingErrorKey] as? NSError {
+                print("❌ [CONNECT] Underlying error: \(underlyingError.localizedDescription)")
+            }
+            
+            // Check for failing URL in userInfo (using string keys for compatibility)
+            if let failingURLString = nsError.userInfo["NSErrorFailingURLStringKey"] as? String {
+                print("❌ [CONNECT] Failing URL: \(failingURLString)")
+            } else if let failingURL = nsError.userInfo["NSErrorFailingURLKey"] as? URL {
+                print("❌ [CONNECT] Failing URL: \(failingURL.absoluteString)")
+            }
+            
             DispatchQueue.main.async {
-                self.messages.append(ChatMessage(text: "❌ \(error.localizedDescription)", isUser: false))
+                self.messages.append(ChatMessage(text: "❌ \(errorMsg)", isUser: false))
                 self.isConnected = false
                 self.resetBandsToSilence()
             }
-            print("❌ Realtime connect error:", error.localizedDescription)
             disconnect()
         }
     }
@@ -300,25 +360,44 @@ final class RealtimeVoiceViewModel: NSObject, ObservableObject {
     }
     
     private func checkForNavigationCommand() async {
-        guard let sessionID = sessionID else { return }
+        guard let sessionID = sessionID else {
+            print("⚠️ [NAV] No session ID available for navigation check")
+            return
+        }
         
-        let url = URL(string: "\(backendURL)/v1/navigation/check/\(sessionID)")!
+        let urlString = "\(backendURL)/v1/navigation/check/\(sessionID)"
+        print("🔍 [NAV] Checking navigation for session: \(sessionID)")
+        print("🔍 [NAV] URL: \(urlString)")
+        
+        guard let url = URL(string: urlString) else {
+            print("❌ [NAV] Invalid URL: \(urlString)")
+            return
+        }
         
         do {
-            let (data, _) = try await URLSession.shared.data(from: url)
+            var request = URLRequest(url: url)
+            request.timeoutInterval = 5.0
+            let (data, response) = try await URLSession.shared.data(for: request)
+            if let httpResponse = response as? HTTPURLResponse {
+                print("📥 [NAV] Response status: \(httpResponse.statusCode)")
+            }
             
             if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                let hasNav = json["has_navigation"] as? Bool,
                hasNav == true,
                let page = json["page"] as? String {
                 
-                print("🎯 Navigation command received: \(page)")
+                print("🎯 [NAV] Navigation command received: \(page)")
                 DispatchQueue.main.async {
                     self.navigationTarget = page
+                    print("✅ [NAV] navigationTarget set to: \(page)")
                 }
+            } else {
+                print("ℹ️ [NAV] No navigation command available")
             }
         } catch {
-            // Silent fail - don't spam console
+            print("⚠️ [NAV] Navigation check failed: \(error.localizedDescription)")
+            // Silent fail - don't spam console for network errors
         }
     }
 

@@ -26,7 +26,7 @@ final class AudioWaveViewModel: NSObject, ObservableObject, AVAudioPlayerDelegat
     
     // MARK: - API
     private let backendAudioURL = URL(string: "http://34.16.78.158:8000/v1/chat/audio")!
-    private let openAIKey = "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"
+    private let openAIKey = "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"
 
     // ✅ OpenAI TTS voice
     private let openAIVoice = "ballad" // جرّب: verse, sage, ballad, coral, ash

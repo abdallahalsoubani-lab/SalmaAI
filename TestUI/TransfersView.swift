@@ -25,8 +25,8 @@ struct TransfersView: View {
         .init(title: "Inside Bank",        systemImage: "diamond",                      tint: .purple),
         .init(title: "Domestic",           systemImage: "building.columns",            tint: .purple.opacity(0.85)),
         .init(title: "International",      systemImage: "globe",                       tint: .pink),
-        .init(title: "CliQ",               systemImage: "magnifyingglass.circle",      tint: .indigo),
-        .init(title: "Fawri (Blockchain)", systemImage: "square.grid.3x3.fill",        tint: .teal)
+        .init(title: "Sarie",               systemImage: "magnifyingglass.circle",      tint: .indigo),
+        .init(title: "SADAD", systemImage: "square.grid.3x3.fill",        tint: .teal)
     ]
 
     // أسماء التحويل السريع
